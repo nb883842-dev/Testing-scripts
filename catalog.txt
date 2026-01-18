@@ -1,4 +1,4 @@
--- Compact Avatar Catalog with Body Bundles Support
+-- Compact Avatar Catalog with Body Bundles Support - FIXED
 local Players = game:GetService("Players")
 local MarketplaceService = game:GetService("MarketplaceService")
 local player = Players.LocalPlayer
@@ -7,7 +7,6 @@ local humanoid = char:WaitForChild("Humanoid")
 
 local equippedItems = {}
 local currentCat = "Hats"
-local currentPage = 1
 
 local sg = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
 sg.Name = "CatalogGUI"
@@ -55,13 +54,13 @@ local catContent = Instance.new("Frame", content)
 catContent.Size, catContent.BackgroundTransparency, catContent.Visible = UDim2.new(1,0,1,0), 1, true
 
 local categories = {
-	{name = "Hats", ids = {607702162,1029025,20573078,13510352,31101391,11748356,1285307,15630952,13424608,12259089,21070012,11884330,1235488,3443393,13423624,98346834,1374269,11419319,13510362,607700713}},
-	{name = "Hair", ids = {4819740796,86896488,48474313,62234425,72636064,48474294,11419729,16630147,13431858,86500036,86500069,19133785,11377306,11748551,86500008,130870206,151784320}},
-	{name = "Faces", ids = {7074786,28118994,17879870,21635489,24187522,22999644,20418518,143220974,26128457,29873780,40725418,41346025,41346394,46113133,113751359,32356477,20722130}},
-	{name = "Shirts", ids = {6916964681,5327691274,1340882082,607785314,144076759,2568126725,1148313272,1148312884,4819738709,5487298755,6856274389,1272714,538326}},
-	{name = "Pants", ids = {6916979608,5327695327,1340884352,129458426,86896580,2568127874,1148314017,1148314299,4819739796,5487300691,6856275317,1272944,538379}},
-	{name = "Bundles", ids = {607,480,84,369,410,411,412,481,482,483,484,485,486,487,488,489,490,491,492,493}},
-	{name = "Bodies", ids = {134082579,139607718,278275077,318330153,360426001,376516531,392136047,398652084,398653506,504070161,504070223,607718562,898785825}}
+	{name = "Hats", ids = {607702162,1029025,20573078,13510352,31101391,11748356,1285307,15630952,13424608,12259089,21070012,11884330,1235488,3443393,13423624}},
+	{name = "Hair", ids = {4819740796,86896488,48474313,62234425,72636064,48474294,11419729,16630147,13431858,86500036,86500069,19133785}},
+	{name = "Faces", ids = {7074786,28118994,17879870,21635489,24187522,22999644,20418518,143220974,26128457,29873780,40725418}},
+	{name = "Shirts", ids = {6916964681,5327691274,1340882082,607785314,144076759,2568126725,1148313272,1148312884}},
+	{name = "Pants", ids = {6916979608,5327695327,1340884352,129458426,86896580,2568127874,1148314017,1148314299}},
+	{name = "Bundles", ids = {607,480,84,369,410,411,412,481,482,483,484,485,486}},
+	{name = "Bodies", ids = {15093053680,134082579,139607718,278275077,318330153,360426001,376516531,392136047,398652084}}
 }
 
 local catButtons = Instance.new("Frame", catContent)
@@ -204,65 +203,95 @@ local function equipFace(id)
 	end)
 end
 
-local function equipBodyParts(bundleId)
-	status.Text, status.TextColor3 = "Loading body bundle...", Color3.fromRGB(255,255,100)
+local function equipBodyPart(id, partType)
+	status.Text, status.TextColor3 = "Applying body part...", Color3.fromRGB(255,255,100)
 	
-	pcall(function()
-		-- Get bundle info
-		local bundleInfo = MarketplaceService:GetProductInfo(bundleId, Enum.InfoType.Bundle)
-		if not bundleInfo or not bundleInfo.BundledItems then
+	local success = pcall(function()
+		-- Get current description or create new one
+		local desc = humanoid:GetAppliedDescription() or Instance.new("HumanoidDescription")
+		
+		-- Set the appropriate body part
+		if partType == 27 or partType == "Head" then 
+			desc.Head = id
+		elseif partType == 28 or partType == "LeftLeg" then 
+			desc.LeftLeg = id
+		elseif partType == 29 or partType == "LeftArm" then 
+			desc.LeftArm = id
+		elseif partType == 30 or partType == "RightArm" then 
+			desc.RightArm = id
+		elseif partType == 31 or partType == "RightLeg" then 
+			desc.RightLeg = id
+		elseif partType == 32 or partType == "Torso" then 
+			desc.Torso = id
+		end
+		
+		-- Apply the description
+		humanoid:ApplyDescription(desc)
+		
+		status.Text = "Body part equipped!"
+		status.TextColor3 = Color3.fromRGB(100,255,100)
+		equippedItems[id] = {item=desc, type="BodyPart"}
+	end)
+	
+	if not success then
+		status.Text = "Failed to apply body part"
+		status.TextColor3 = Color3.fromRGB(255,100,100)
+	end
+	
+	return success
+end
+
+local function equipBundle(bundleId)
+	status.Text, status.TextColor3 = "Loading bundle...", Color3.fromRGB(255,255,100)
+	
+	local success = pcall(function()
+		local info = MarketplaceService:GetProductInfo(bundleId, Enum.InfoType.Bundle)
+		if not info or not info.BundledItems then
 			status.Text = "Invalid bundle"
 			status.TextColor3 = Color3.fromRGB(255,100,100)
 			return
 		end
 		
-		-- Apply description with HumanoidDescription
-		if humanoid then
-			local desc = Instance.new("HumanoidDescription")
+		-- Check if it has body parts
+		local hasBodyParts = false
+		local desc = humanoid:GetAppliedDescription() or Instance.new("HumanoidDescription")
+		
+		for _, item in pairs(info.BundledItems) do
+			local itemInfo = MarketplaceService:GetProductInfo(item.Id, Enum.InfoType.Asset)
+			local assetType = itemInfo.AssetTypeId
 			
-			for _, item in pairs(bundleInfo.BundledItems) do
-				local itemInfo = MarketplaceService:GetProductInfo(item.Id, Enum.InfoType.Asset)
-				local assetType = itemInfo.AssetTypeId
-				
-				-- Body parts
-				if assetType == 27 then desc.Head = item.Id -- Head
-				elseif assetType == 29 then desc.LeftArm = item.Id -- Left Arm
-				elseif assetType == 28 then desc.LeftLeg = item.Id -- Left Leg
-				elseif assetType == 30 then desc.RightArm = item.Id -- Right Arm
-				elseif assetType == 31 then desc.RightLeg = item.Id -- Right Leg
-				elseif assetType == 32 then desc.Torso = item.Id -- Torso
-				-- Accessories and clothing
-				elseif assetType == 8 or assetType == 41 or assetType == 42 or assetType == 43 or assetType == 44 or assetType == 45 or assetType == 46 or assetType == 47 or assetType == 64 or assetType == 65 then
-					wait(0.1)
-					addAccessory(item.Id)
-				elseif assetType == 11 then equipClothing(item.Id, "Shirt")
-				elseif assetType == 12 then equipClothing(item.Id, "Pants")
-				elseif assetType == 18 then equipFace(item.Id)
-				end
+			-- Body parts (27-32)
+			if assetType == 27 then desc.Head = item.Id hasBodyParts = true
+			elseif assetType == 28 then desc.LeftLeg = item.Id hasBodyParts = true
+			elseif assetType == 29 then desc.LeftArm = item.Id hasBodyParts = true
+			elseif assetType == 30 then desc.RightArm = item.Id hasBodyParts = true
+			elseif assetType == 31 then desc.RightLeg = item.Id hasBodyParts = true
+			elseif assetType == 32 then desc.Torso = item.Id hasBodyParts = true
+			-- Accessories
+			elseif assetType == 8 or assetType == 41 or assetType == 42 or assetType == 43 or assetType == 44 or assetType == 45 or assetType == 46 or assetType == 47 or assetType == 64 or assetType == 65 then
+				wait(0.1)
+				addAccessory(item.Id)
+			-- Clothing
+			elseif assetType == 11 then equipClothing(item.Id, "Shirt")
+			elseif assetType == 12 then equipClothing(item.Id, "Pants")
+			elseif assetType == 18 then equipFace(item.Id)
 			end
-			
-			-- Apply the description
+		end
+		
+		-- Apply body parts if any
+		if hasBodyParts then
 			humanoid:ApplyDescription(desc)
-			
-			status.Text = "Body bundle equipped!"
-			status.TextColor3 = Color3.fromRGB(100,255,100)
-			equippedItems[bundleId] = {item=desc,type="BodyBundle"}
 		end
+		
+		status.Text = "Bundle equipped!"
+		status.TextColor3 = Color3.fromRGB(100,255,100)
+		equippedItems[bundleId] = {item=desc, type="Bundle"}
 	end)
-end
-
-local function equipBundle(bundleId)
-	status.Text, status.TextColor3 = "Loading bundle...", Color3.fromRGB(255,255,100)
-	pcall(function()
-		local info = MarketplaceService:GetProductInfo(bundleId, Enum.InfoType.Bundle)
-		if info and info.BundledItems then
-			for _,item in pairs(info.BundledItems) do
-				wait(0.15)
-				autoEquip(item.Id)
-			end
-			status.Text, status.TextColor3 = "Bundle equipped!", Color3.fromRGB(100,255,100)
-		end
-	end)
+	
+	if not success then
+		status.Text = "Bundle failed to load"
+		status.TextColor3 = Color3.fromRGB(255,100,100)
+	end
 end
 
 local function updateEquipped()
@@ -297,55 +326,48 @@ end
 
 function autoEquip(id)
 	status.Text, status.TextColor3 = "Loading...", Color3.fromRGB(255,255,100)
-	pcall(function()
+	
+	local success, err = pcall(function()
 		local info = MarketplaceService:GetProductInfo(id)
 		local t = info.AssetTypeId
 		
 		-- Check if bundle
-		if info.ProductType=="Bundle" or info.AssetType=="Bundle" then
-			-- Check if it's a body bundle by looking at bundled items
-			local bundleInfo = MarketplaceService:GetProductInfo(id, Enum.InfoType.Bundle)
-			local hasBodyParts = false
-			if bundleInfo and bundleInfo.BundledItems then
-				for _, item in pairs(bundleInfo.BundledItems) do
-					local itemInfo = MarketplaceService:GetProductInfo(item.Id, Enum.InfoType.Asset)
-					if itemInfo.AssetTypeId >= 27 and itemInfo.AssetTypeId <= 32 then
-						hasBodyParts = true
-						break
-					end
-				end
-			end
-			
-			if hasBodyParts then
-				equipBodyParts(id)
-			else
-				equipBundle(id)
-			end
+		if info.ProductType == "Bundle" or info.AssetType == "Bundle" then
+			equipBundle(id)
 			return
 		end
 		
 		local s = false
-		if t==8 or t==41 or t==42 or t==43 or t==44 or t==45 or t==46 or t==47 or t==64 or t==65 then s=addAccessory(id)
-		elseif t==11 then s=equipClothing(id,"Shirt")
-		elseif t==12 then s=equipClothing(id,"Pants")
-		elseif t==2 then s=equipClothing(id,"ShirtGraphic")
-		elseif t==18 then s=equipFace(id)
-		-- Body parts
-		elseif t==27 or t==28 or t==29 or t==30 or t==31 or t==32 then
-			local desc = humanoid:GetAppliedDescription() or Instance.new("HumanoidDescription")
-			if t==27 then desc.Head=id elseif t==28 then desc.LeftLeg=id elseif t==29 then desc.LeftArm=id
-			elseif t==30 then desc.RightArm=id elseif t==31 then desc.RightLeg=id elseif t==32 then desc.Torso=id end
-			humanoid:ApplyDescription(desc)
-			s=true
+		
+		-- Accessories
+		if t==8 or t==41 or t==42 or t==43 or t==44 or t==45 or t==46 or t==47 or t==64 or t==65 then 
+			s = addAccessory(id)
+		-- Clothing
+		elseif t==11 then s = equipClothing(id,"Shirt")
+		elseif t==12 then s = equipClothing(id,"Pants")
+		elseif t==2 then s = equipClothing(id,"ShirtGraphic")
+		-- Face
+		elseif t==18 then s = equipFace(id)
+		-- Body parts (27=Head, 28=LeftLeg, 29=LeftArm, 30=RightArm, 31=RightLeg, 32=Torso)
+		elseif t >= 27 and t <= 32 then
+			s = equipBodyPart(id, t)
 		end
 		
 		if s then
-			status.Text, status.TextColor3 = "Equipped!", Color3.fromRGB(100,255,100)
+			status.Text = "Equipped!"
+			status.TextColor3 = Color3.fromRGB(100,255,100)
 			updateEquipped()
 		else
-			status.Text, status.TextColor3 = "Unsupported type", Color3.fromRGB(255,150,100)
+			status.Text = "Unsupported type"
+			status.TextColor3 = Color3.fromRGB(255,150,100)
 		end
 	end)
+	
+	if not success then
+		status.Text = "Error: ".. tostring(err)
+		status.TextColor3 = Color3.fromRGB(255,100,100)
+		print("Error loading item:", err)
+	end
 end
 
 local function createCard(id, isBundle)
@@ -441,4 +463,4 @@ player.CharacterAdded:Connect(function(newChar)
 	updateEquipped()
 end)
 
-print("Avatar Catalog loaded! Use Bodies tab for headless and body bundles.")
+print("✅ Avatar Catalog loaded! Paste
