@@ -215,7 +215,7 @@ equippedPadding.PaddingTop = UDim.new(0, 8)
 equippedPadding.PaddingRight = UDim.new(0, 8)
 equippedPadding.Parent = equippedScroll
 
--- Skin Content with Extended Color Palette
+-- Skin Content
 local skinContent = Instance.new("Frame")
 skinContent.Size = UDim2.new(1, 0, 1, 0)
 skinContent.BackgroundTransparency = 1
@@ -261,7 +261,6 @@ colorScrollPadding.Parent = colorScroll
 
 -- Extended Color Presets
 local colorPresets = {
-	-- Skin Tones
 	{name = "Porcelain", color = Color3.fromRGB(255, 239, 224)},
 	{name = "Ivory", color = Color3.fromRGB(255, 228, 205)},
 	{name = "Light", color = Color3.fromRGB(255, 204, 153)},
@@ -274,13 +273,11 @@ local colorPresets = {
 	{name = "Deep Brown", color = Color3.fromRGB(140, 85, 50)},
 	{name = "Darker", color = Color3.fromRGB(116, 67, 37)},
 	{name = "Espresso", color = Color3.fromRGB(100, 55, 30)},
-	-- Basic Colors
 	{name = "White", color = Color3.fromRGB(255, 255, 255)},
 	{name = "Light Gray", color = Color3.fromRGB(200, 200, 200)},
 	{name = "Gray", color = Color3.fromRGB(128, 128, 128)},
 	{name = "Dark Gray", color = Color3.fromRGB(64, 64, 64)},
 	{name = "Black", color = Color3.fromRGB(0, 0, 0)},
-	-- Vibrant Colors
 	{name = "Red", color = Color3.fromRGB(255, 0, 0)},
 	{name = "Crimson", color = Color3.fromRGB(220, 20, 60)},
 	{name = "Orange", color = Color3.fromRGB(255, 165, 0)},
@@ -295,14 +292,12 @@ local colorPresets = {
 	{name = "Purple", color = Color3.fromRGB(128, 0, 128)},
 	{name = "Magenta", color = Color3.fromRGB(255, 0, 255)},
 	{name = "Pink", color = Color3.fromRGB(255, 192, 203)},
-	-- Pastel Colors
 	{name = "Pastel Pink", color = Color3.fromRGB(255, 209, 220)},
 	{name = "Pastel Blue", color = Color3.fromRGB(174, 198, 207)},
 	{name = "Pastel Green", color = Color3.fromRGB(179, 226, 205)},
 	{name = "Pastel Yellow", color = Color3.fromRGB(253, 253, 150)},
 	{name = "Pastel Purple", color = Color3.fromRGB(203, 195, 227)},
 	{name = "Lavender", color = Color3.fromRGB(230, 230, 250)},
-	-- Neon Colors
 	{name = "Neon Red", color = Color3.fromRGB(255, 16, 240)},
 	{name = "Neon Orange", color = Color3.fromRGB(255, 95, 31)},
 	{name = "Neon Yellow", color = Color3.fromRGB(224, 231, 34)},
@@ -563,7 +558,7 @@ local function updateEquipped()
 		fc.CornerRadius = UDim.new(0, 8)
 		fc.Parent = f
 		
-local t = Instance.new("ImageLabel")
+		local t = Instance.new("ImageLabel")
 		t.Size = UDim2.new(0, 65, 0, 65)
 		t.Position = UDim2.new(0, 5, 0, 5)
 		t.BackgroundColor3 = Color3.fromRGB(32, 34, 37)
