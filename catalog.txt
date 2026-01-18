@@ -1,16 +1,13 @@
--- Enhanced Avatar Catalog Browser with Bundles & Color Wheel
+-- Enhanced Avatar Catalog Browser - FIXED VERSION
 -- Place this in StarterGui or StarterPlayerScripts
 
 local Players = game:GetService("Players")
 local MarketplaceService = game:GetService("MarketplaceService")
-local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
 local char = player.Character or player.CharacterAdded:Wait()
 
 local equippedItems = {}
-local catalogCache = {}
-local currentPage = 1
-local isLoading = false
+local currentCategory = "Accessories"
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "CatalogBrowserGUI"
@@ -115,22 +112,27 @@ catalogContent.Parent = contentFrame
 
 -- Category buttons
 local categories = {
-	{name = "Accessories", keyword = "accessories"},
-	{name = "Clothing", keyword = "clothing"},
-	{name = "Bundles", keyword = "bundles"},
-	{name = "Faces", keyword = "faces"}
+	{name = "Hats", ids = {607702162, 1029025, 20573078, 13510352, 31101391}},
+	{name = "Hair", ids = {4819740796, 86896488, 48474313, 62234425, 72636064}},
+	{name = "Faces", ids = {7074786, 28118994, 17879870, 21635489, 24187522}},
+	{name = "Shirts", ids = {6916964681, 5327691274, 1340882082, 607785314, 144076759}},
+	{name = "Pants", ids = {6916979608, 5327695327, 1340884352, 129458426, 86896580}}
 }
 
 local categoryFrame = Instance.new("Frame")
-categoryFrame.Size = UDim2.new(1, -20, 0, 35)
+categoryFrame.Size = UDim2.new(1, -20, 0, 60)
 categoryFrame.Position = UDim2.new(0, 10, 0, 5)
 categoryFrame.BackgroundTransparency = 1
 categoryFrame.Parent = catalogContent
 
+local catButtons = {}
 for i, cat in ipairs(categories) do
+	local row = math.floor((i - 1) / 3)
+	local col = (i - 1) % 3
+	
 	local catBtn = Instance.new("TextButton")
-	catBtn.Size = UDim2.new(0.25, -5, 1, 0)
-	catBtn.Position = UDim2.new((i-1) * 0.25, 0, 0, 0)
+	catBtn.Size = UDim2.new(0.33, -5, 0, 25)
+	catBtn.Position = UDim2.new(col * 0.33, 0, row * 0.5, 0)
 	catBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
 	catBtn.BorderSizePixel = 0
 	catBtn.Text = cat.name
@@ -142,16 +144,33 @@ for i, cat in ipairs(categories) do
 	local catCorner = Instance.new("UICorner")
 	catCorner.CornerRadius = UDim.new(0, 5)
 	catCorner.Parent = catBtn
+	
+	catButtons[cat.name] = catBtn
+	
+	catBtn.MouseButton1Click:Connect(function()
+		currentCategory = cat.name
+		for name, btn in pairs(catButtons) do
+			if name == cat.name then
+				btn.BackgroundColor3 = Color3.fromRGB(70, 130, 250)
+			else
+				btn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+			end
+		end
+		loadCatalogItems(cat.ids)
+	end)
 end
+
+-- Set initial category
+catButtons["Hats"].BackgroundColor3 = Color3.fromRGB(70, 130, 250)
 
 -- Search box
 local searchBox = Instance.new("TextBox")
 searchBox.Size = UDim2.new(1, -20, 0, 35)
-searchBox.Position = UDim2.new(0, 10, 0, 45)
+searchBox.Position = UDim2.new(0, 10, 0, 70)
 searchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 searchBox.BorderSizePixel = 0
 searchBox.Text = ""
-searchBox.PlaceholderText = "Search or paste ID..."
+searchBox.PlaceholderText = "Paste Asset ID..."
 searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 searchBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 130)
 searchBox.Font = Enum.Font.Gotham
@@ -164,8 +183,8 @@ searchCorner.Parent = searchBox
 
 -- Catalog scroll
 local catalogScroll = Instance.new("ScrollingFrame")
-catalogScroll.Size = UDim2.new(1, -20, 1, -90)
-catalogScroll.Position = UDim2.new(0, 10, 0, 85)
+catalogScroll.Size = UDim2.new(1, -20, 1, -115)
+catalogScroll.Position = UDim2.new(0, 10, 0, 110)
 catalogScroll.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 catalogScroll.BorderSizePixel = 0
 catalogScroll.ScrollBarThickness = 4
@@ -216,7 +235,7 @@ equippedPadding.PaddingTop = UDim.new(0, 5)
 equippedPadding.PaddingRight = UDim.new(0, 5)
 equippedPadding.Parent = equippedScroll
 
--- SKIN TAB with Color Wheel
+-- SKIN TAB with Enhanced Color Wheel
 local skinContent = Instance.new("Frame")
 skinContent.Size = UDim2.new(1, 0, 1, 0)
 skinContent.BackgroundTransparency = 1
@@ -234,38 +253,70 @@ skinLabel.TextSize = 14
 skinLabel.TextXAlignment = Enum.TextXAlignment.Left
 skinLabel.Parent = skinContent
 
--- Color wheel
-local wheelSize = 200
+-- Enhanced Color Wheel with more colors
+local wheelSize = 240
 local wheelFrame = Instance.new("Frame")
 wheelFrame.Size = UDim2.new(0, wheelSize, 0, wheelSize)
-wheelFrame.Position = UDim2.new(0.5, -wheelSize/2, 0, 50)
+wheelFrame.Position = UDim2.new(0.5, -wheelSize/2, 0, 45)
 wheelFrame.BackgroundTransparency = 1
 wheelFrame.Parent = skinContent
 
--- Create color wheel with circles
+-- Create comprehensive color wheel
 local colorWheel = {
-	-- Skin tones arranged in circle
-	{angle = 0, color = Color3.fromRGB(255, 204, 153), name = "Light"},
-	{angle = 45, color = Color3.fromRGB(245, 195, 160), name = "Tan"},
-	{angle = 90, color = Color3.fromRGB(227, 176, 141), name = "Beige"},
-	{angle = 135, color = Color3.fromRGB(198, 134, 100), name = "Brown"},
-	{angle = 180, color = Color3.fromRGB(160, 95, 53), name = "Dark"},
-	{angle = 225, color = Color3.fromRGB(116, 67, 37), name = "Darker"},
-	{angle = 270, color = Color3.fromRGB(255, 255, 255), name = "White"},
-	{angle = 315, color = Color3.fromRGB(0, 0, 0), name = "Black"}
+	-- Inner ring - Skin tones
+	{angle = 0, radius = 45, color = Color3.fromRGB(255, 220, 177), name = "Pale"},
+	{angle = 45, radius = 45, color = Color3.fromRGB(255, 204, 153), name = "Light"},
+	{angle = 90, radius = 45, color = Color3.fromRGB(245, 195, 160), name = "Tan"},
+	{angle = 135, radius = 45, color = Color3.fromRGB(227, 176, 141), name = "Beige"},
+	{angle = 180, radius = 45, color = Color3.fromRGB(198, 134, 100), name = "Brown"},
+	{angle = 225, radius = 45, color = Color3.fromRGB(160, 95, 53), name = "Dark"},
+	{angle = 270, radius = 45, color = Color3.fromRGB(116, 67, 37), name = "Darker"},
+	{angle = 315, radius = 45, color = Color3.fromRGB(92, 52, 24), name = "Deep"},
+	
+	-- Middle ring - Vibrant colors
+	{angle = 0, radius = 90, color = Color3.fromRGB(255, 0, 0), name = "Red"},
+	{angle = 30, radius = 90, color = Color3.fromRGB(255, 127, 0), name = "Orange"},
+	{angle = 60, radius = 90, color = Color3.fromRGB(255, 255, 0), name = "Yellow"},
+	{angle = 90, radius = 90, color = Color3.fromRGB(127, 255, 0), name = "Lime"},
+	{angle = 120, radius = 90, color = Color3.fromRGB(0, 255, 0), name = "Green"},
+	{angle = 150, radius = 90, color = Color3.fromRGB(0, 255, 127), name = "Spring"},
+	{angle = 180, radius = 90, color = Color3.fromRGB(0, 255, 255), name = "Cyan"},
+	{angle = 210, radius = 90, color = Color3.fromRGB(0, 127, 255), name = "Sky"},
+	{angle = 240, radius = 90, color = Color3.fromRGB(0, 0, 255), name = "Blue"},
+	{angle = 270, radius = 90, color = Color3.fromRGB(127, 0, 255), name = "Purple"},
+	{angle = 300, radius = 90, color = Color3.fromRGB(255, 0, 255), name = "Magenta"},
+	{angle = 330, radius = 90, color = Color3.fromRGB(255, 0, 127), name = "Pink"},
+	
+	-- Center colors
+	{angle = 0, radius = 0, color = Color3.fromRGB(255, 255, 255), name = "White"},
+	{angle = 90, radius = 0, color = Color3.fromRGB(128, 128, 128), name = "Gray"},
+	{angle = 180, radius = 0, color = Color3.fromRGB(64, 64, 64), name = "Dark Gray"},
+	{angle = 270, radius = 0, color = Color3.fromRGB(0, 0, 0), name = "Black"}
 }
 
-local radius = 80
 for _, preset in ipairs(colorWheel) do
 	local rad = math.rad(preset.angle)
-	local x = math.cos(rad) * radius
-	local y = math.sin(rad) * radius
+	local x, y
+	
+	if preset.radius == 0 then
+		-- Center colors in a small cross pattern
+		if preset.angle == 0 then x, y = 0, -25
+		elseif preset.angle == 90 then x, y = 25, 0
+		elseif preset.angle == 180 then x, y = 0, 25
+		else x, y = -25, 0
+		end
+	else
+		x = math.cos(rad) * preset.radius
+		y = math.sin(rad) * preset.radius
+	end
+	
+	local size = preset.radius == 45 and 35 or (preset.radius == 0 and 30 or 28)
 	
 	local colorBtn = Instance.new("TextButton")
-	colorBtn.Size = UDim2.new(0, 45, 0, 45)
-	colorBtn.Position = UDim2.new(0.5, x - 22.5, 0.5, y - 22.5)
+	colorBtn.Size = UDim2.new(0, size, 0, size)
+	colorBtn.Position = UDim2.new(0.5, x - size/2, 0.5, y - size/2)
 	colorBtn.BackgroundColor3 = preset.color
-	colorBtn.BorderSizePixel = 3
+	colorBtn.BorderSizePixel = 2
 	colorBtn.BorderColor3 = Color3.fromRGB(60, 60, 70)
 	colorBtn.Text = ""
 	colorBtn.Parent = wheelFrame
@@ -276,8 +327,8 @@ for _, preset in ipairs(colorWheel) do
 	
 	-- Tooltip
 	local tooltip = Instance.new("TextLabel")
-	tooltip.Size = UDim2.new(0, 60, 0, 20)
-	tooltip.Position = UDim2.new(0.5, -30, 1, 5)
+	tooltip.Size = UDim2.new(0, 70, 0, 20)
+	tooltip.Position = UDim2.new(0.5, -35, 1, 5)
 	tooltip.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 	tooltip.BorderSizePixel = 0
 	tooltip.Text = preset.name
@@ -285,6 +336,7 @@ for _, preset in ipairs(colorWheel) do
 	tooltip.Font = Enum.Font.Gotham
 	tooltip.TextSize = 10
 	tooltip.Visible = false
+	tooltip.ZIndex = 5
 	tooltip.Parent = colorBtn
 	
 	local tipCorner = Instance.new("UICorner")
@@ -293,7 +345,14 @@ for _, preset in ipairs(colorWheel) do
 	
 	colorBtn.MouseEnter:Connect(function()
 		tooltip.Visible = true
-	colorBtn.BorderColor3 = Color3.fromRGB(60, 60, 70)
+		colorBtn.BorderColor3 = Color3.fromRGB(100, 200, 255)
+		colorBtn.BorderSizePixel = 3
+	end)
+	
+	colorBtn.MouseLeave:Connect(function()
+		tooltip.Visible = false
+		colorBtn.BorderColor3 = Color3.fromRGB(60, 60, 70)
+		colorBtn.BorderSizePixel = 2
 	end)
 	
 	colorBtn.MouseButton1Click:Connect(function()
@@ -424,7 +483,6 @@ local function equipFace(id)
 	end)
 end
 
--- Equip bundle items
 local function equipBundle(bundleId)
 	pcall(function()
 		local bundleInfo = MarketplaceService:GetProductInfo(bundleId, Enum.InfoType.Bundle)
@@ -512,7 +570,7 @@ function autoEquip(id)
 end
 
 -- Create catalog item card
-local function createItemCard(itemId, itemName)
+local function createItemCard(itemId)
 	local card = Instance.new("Frame")
 	card.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 	card.BorderSizePixel = 0
@@ -538,13 +596,23 @@ local function createItemCard(itemId, itemName)
 	name.Size = UDim2.new(1, -6, 0, 20)
 	name.Position = UDim2.new(0, 3, 0, 80)
 	name.BackgroundTransparency = 1
-	name.Text = itemName or "Item"
+	name.Text = "Loading..."
 	name.TextColor3 = Color3.fromRGB(220, 220, 220)
 	name.Font = Enum.Font.Gotham
 	name.TextSize = 9
 	name.TextWrapped = true
 	name.TextTruncate = Enum.TextTruncate.AtEnd
 	name.Parent = card
+	
+	-- Load real name
+	spawn(function()
+		pcall(function()
+			local info = MarketplaceService:GetProductInfo(itemId, Enum.InfoType.Asset)
+			if info then
+				name.Text = info.Name
+			end
+		end)
+	end)
 	
 	local equipBtn = Instance.new("TextButton")
 	equipBtn.Size = UDim2.new(1, -6, 0, 18)
@@ -566,29 +634,29 @@ local function createItemCard(itemId, itemName)
 	end)
 end
 
--- Load sample catalog items
-local function loadCatalogItems()
-	-- Sample popular item IDs (these will show in catalog)
-	local sampleItems = {
-		{id = 607702162, name = "Beautiful Hair"},
-		{id = 4819740796, name = "Messy Hair"},
-		{id = 11884330, name = "Robloxian 2.0"},
-		{id = 86896488, name = "Pink Hair"},
-		{id = 1340882082, name = "Black Shirt"},
-		{id = 1340884352, name = "Black Pants"},
-		{id = 121217852, name = "Smile Face"},
-		{id = 28118994, name = "Happy Face"},
-		{id = 13510352, name = "Headless Head"},
-		{id = 134082579, name = "Red Roblox Cap"},
-		{id = 31117267, name = "Shaggy"},
-		{id = 48474313, name = "Pal Hair"}
-	}
+-- Load catalog items function
+function loadCatalogItems(itemIds)
+	-- Clear existing
+	for _, child in pairs(catalogScroll:GetChildren()) do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
 	
-	for _, item in ipairs(sampleItems) do
-		createItemCard(item.id, item.name)
+	statusLabel.Text = "Loading items..."
+	statusLabel.TextColor3 = Color3.fromRGB(255, 255, 100)
+	
+	-- Load each item with delay to prevent lag
+	for i, itemId in ipairs(itemIds) do
+		createItemCard(itemId)
+		if i % 3 == 0 then
+			wait(0.05) -- Small delay every 3 items
+		end
 	end
 	
 	catalogScroll.CanvasSize = UDim2.new(0, 0, 0, catalogGrid.AbsoluteContentSize.Y + 10)
+	statusLabel.Text = "Ready"
+	statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
 end
 
 -- Search functionality
@@ -605,12 +673,12 @@ searchBox.FocusLost:Connect(function(enterPressed)
 	end
 end)
 
--- Load items on startup
-loadCatalogItems()
+-- Load initial catalog items (Hats category)
+loadCatalogItems(categories[1].ids)
 
 -- Character respawn
 player.CharacterAdded:Connect(function(newChar)
 	char = newChar
 	equippedItems = {}
 	updateEquipped()
-end)	
+end)
