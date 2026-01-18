@@ -632,7 +632,6 @@ function autoEquip(id)
 	end)
 end
 
--- Create catalog item card
 local function createItemCard(itemId)
 	local card = Instance.new("Frame")
 	card.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
@@ -712,7 +711,6 @@ function loadCatalogItems(itemIds)
 	statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
 end
 
--- Category button handlers
 for i, cat in ipairs(categories) do
 	catButtons[cat.name].MouseButton1Click:Connect(function()
 		for name, btn in pairs(catButtons) do
@@ -722,7 +720,6 @@ for i, cat in ipairs(categories) do
 	end)
 end
 
--- Search functionality
 searchBox.FocusLost:Connect(function(enterPressed)
 	if enterPressed then
 		local id = tonumber(searchBox.Text)
@@ -735,10 +732,8 @@ searchBox.FocusLost:Connect(function(enterPressed)
 	end
 end)
 
--- Load initial items
 loadCatalogItems(categories[1].ids)
 
--- Character respawn
 player.CharacterAdded:Connect(function(newChar)
 	char = newChar
 	equippedItems = {}
