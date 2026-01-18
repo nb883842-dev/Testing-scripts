@@ -1,0 +1,915 @@
+-- Enhanced Avatar Catalog Browser with Save/Load System - FIXED
+-- Place this in StarterGui or StarterPlayerScripts
+
+local Players = game:GetService("Players")
+local MarketplaceService = game:GetService("MarketplaceService")
+local player = Players.LocalPlayer
+local char = player.Character or player.CharacterAdded:Wait()
+
+local equippedItems = {}
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "CatalogBrowserGUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+-- Toggle Button
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0, 55, 0, 55)
+toggleButton.Position = UDim2.new(1, -70, 0.5, -27.5)
+toggleButton.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+toggleButton.BorderSizePixel = 0
+toggleButton.Text = "◀"
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.Font = Enum.Font.GothamBold
+toggleButton.TextSize = 26
+toggleButton.ZIndex = 10
+toggleButton.Parent = screenGui
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 27.5)
+toggleCorner.Parent = toggleButton
+
+local toggleShadow = Instance.new("UIStroke")
+toggleShadow.Color = Color3.fromRGB(0, 0, 0)
+toggleShadow.Thickness = 2
+toggleShadow.Transparency = 0.7
+toggleShadow.Parent = toggleButton
+
+-- Main Frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 380, 0.92, 0)
+mainFrame.Position = UDim2.new(1, 0, 0.04, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(32, 34, 37)
+mainFrame.BorderSizePixel = 0
+mainFrame.Visible = false
+mainFrame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 16)
+corner.Parent = mainFrame
+
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = Color3.fromRGB(88, 101, 242)
+mainStroke.Thickness = 2
+mainStroke.Transparency = 0.5
+mainStroke.Parent = mainFrame
+
+-- Top Bar
+local topBar = Instance.new("Frame")
+topBar.Size = UDim2.new(1, 0, 0, 50)
+topBar.BackgroundColor3 = Color3.fromRGB(47, 49, 54)
+topBar.BorderSizePixel = 0
+topBar.Parent = mainFrame
+
+local topCorner = Instance.new("UICorner")
+topCorner.CornerRadius = UDim.new(0, 16)
+topCorner.Parent = topBar
+
+local titleContainer = Instance.new("Frame")
+titleContainer.Size = UDim2.new(1, 0, 1, 0)
+titleContainer.BackgroundTransparency = 1
+titleContainer.Parent = topBar
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -100, 1, 0)
+title.Position = UDim2.new(0, 15, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "✨ Avatar Studio"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 20
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = titleContainer
+
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0, 40, 0, 40)
+closeButton.Position = UDim2.new(1, -45, 0.5, -20)
+closeButton.BackgroundColor3 = Color3.fromRGB(237, 66, 69)
+closeButton.BorderSizePixel = 0
+closeButton.Text = "✕"
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.Font = Enum.Font.GothamBold
+closeButton.TextSize = 20
+closeButton.Parent = titleContainer
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 10)
+closeCorner.Parent = closeButton
+
+closeButton.MouseButton1Click:Connect(function()
+	screenGui:Destroy()
+end)
+
+-- Tabs Frame
+local tabsFrame = Instance.new("Frame")
+tabsFrame.Size = UDim2.new(1, -20, 0, 45)
+tabsFrame.Position = UDim2.new(0, 10, 0, 60)
+tabsFrame.BackgroundTransparency = 1
+tabsFrame.BorderSizePixel = 0
+tabsFrame.Parent = mainFrame
+
+local tabs = {"Search", "Equipped", "Skin", "Save"}
+local activeTab = "Search"
+local tabButtons = {}
+
+for i, tabName in ipairs(tabs) do
+	local tabBtn = Instance.new("TextButton")
+	tabBtn.Size = UDim2.new(1/4, -6, 1, 0)
+	tabBtn.Position = UDim2.new((i-1)/4, (i-1)*2, 0, 0)
+	tabBtn.BackgroundColor3 = Color3.fromRGB(54, 57, 63)
+	tabBtn.BorderSizePixel = 0
+	tabBtn.Text = tabName
+	tabBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
+	tabBtn.Font = Enum.Font.GothamBold
+	tabBtn.TextSize = 14
+	tabBtn.Parent = tabsFrame
+	
+	local btnCorner = Instance.new("UICorner")
+	btnCorner.CornerRadius = UDim.new(0, 8)
+	btnCorner.Parent = tabBtn
+	
+	tabButtons[tabName] = tabBtn
+end
+
+-- Content Frame
+local contentFrame = Instance.new("Frame")
+contentFrame.Size = UDim2.new(1, 0, 1, -115)
+contentFrame.Position = UDim2.new(0, 0, 0, 115)
+contentFrame.BackgroundTransparency = 1
+contentFrame.Parent = mainFrame
+
+-- Search Content
+local searchContent = Instance.new("Frame")
+searchContent.Size = UDim2.new(1, 0, 1, 0)
+searchContent.BackgroundTransparency = 1
+searchContent.Visible = true
+searchContent.Parent = contentFrame
+
+local searchBox = Instance.new("TextBox")
+searchBox.Size = UDim2.new(1, -30, 0, 40)
+searchBox.Position = UDim2.new(0, 15, 0, 15)
+searchBox.BackgroundColor3 = Color3.fromRGB(54, 57, 63)
+searchBox.BorderSizePixel = 0
+searchBox.Text = ""
+searchBox.PlaceholderText = "🔍 Paste Asset ID here..."
+searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+searchBox.PlaceholderColor3 = Color3.fromRGB(140, 140, 150)
+searchBox.Font = Enum.Font.Gotham
+searchBox.TextSize = 15
+searchBox.ClearTextOnFocus = false
+searchBox.Parent = searchContent
+
+local searchCorner = Instance.new("UICorner")
+searchCorner.CornerRadius = UDim.new(0, 8)
+searchCorner.Parent = searchBox
+
+local searchPadding = Instance.new("UIPadding")
+searchPadding.PaddingLeft = UDim.new(0, 12)
+searchPadding.Parent = searchBox
+
+local searchButton = Instance.new("TextButton")
+searchButton.Size = UDim2.new(1, -30, 0, 42)
+searchButton.Position = UDim2.new(0, 15, 0, 65)
+searchButton.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+searchButton.BorderSizePixel = 0
+searchButton.Text = "⚡ Equip Item"
+searchButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+searchButton.Font = Enum.Font.GothamBold
+searchButton.TextSize = 16
+searchButton.Parent = searchContent
+
+local searchBtnCorner = Instance.new("UICorner")
+searchBtnCorner.CornerRadius = UDim.new(0, 8)
+searchBtnCorner.Parent = searchButton
+
+-- Equipped Content
+local equippedContent = Instance.new("Frame")
+equippedContent.Size = UDim2.new(1, 0, 1, 0)
+equippedContent.BackgroundTransparency = 1
+equippedContent.Visible = false
+equippedContent.Parent = contentFrame
+
+local equippedScroll = Instance.new("ScrollingFrame")
+equippedScroll.Size = UDim2.new(1, -30, 1, -15)
+equippedScroll.Position = UDim2.new(0, 15, 0, 10)
+equippedScroll.BackgroundColor3 = Color3.fromRGB(47, 49, 54)
+equippedScroll.BorderSizePixel = 0
+equippedScroll.ScrollBarThickness = 6
+equippedScroll.ScrollBarImageColor3 = Color3.fromRGB(88, 101, 242)
+equippedScroll.Parent = equippedContent
+
+local equippedCorner = Instance.new("UICorner")
+equippedCorner.CornerRadius = UDim.new(0, 10)
+equippedCorner.Parent = equippedScroll
+
+local equippedList = Instance.new("UIListLayout")
+equippedList.Padding = UDim.new(0, 8)
+equippedList.SortOrder = Enum.SortOrder.LayoutOrder
+equippedList.Parent = equippedScroll
+
+local equippedPadding = Instance.new("UIPadding")
+equippedPadding.PaddingLeft = UDim.new(0, 8)
+equippedPadding.PaddingTop = UDim.new(0, 8)
+equippedPadding.PaddingRight = UDim.new(0, 8)
+equippedPadding.Parent = equippedScroll
+
+-- Skin Content
+local skinContent = Instance.new("Frame")
+skinContent.Size = UDim2.new(1, 0, 1, 0)
+skinContent.BackgroundTransparency = 1
+skinContent.Visible = false
+skinContent.Parent = contentFrame
+
+local skinLabel = Instance.new("TextLabel")
+skinLabel.Size = UDim2.new(1, -30, 0, 30)
+skinLabel.Position = UDim2.new(0, 15, 0, 5)
+skinLabel.BackgroundTransparency = 1
+skinLabel.Text = "🎨 Select Skin Color"
+skinLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+skinLabel.Font = Enum.Font.GothamBold
+skinLabel.TextSize = 16
+skinLabel.TextXAlignment = Enum.TextXAlignment.Left
+skinLabel.Parent = skinContent
+
+local colorScroll = Instance.new("ScrollingFrame")
+colorScroll.Size = UDim2.new(1, -30, 1, -45)
+colorScroll.Position = UDim2.new(0, 15, 0, 40)
+colorScroll.BackgroundColor3 = Color3.fromRGB(47, 49, 54)
+colorScroll.BorderSizePixel = 0
+colorScroll.ScrollBarThickness = 6
+colorScroll.ScrollBarImageColor3 = Color3.fromRGB(88, 101, 242)
+colorScroll.Parent = skinContent
+
+local colorScrollCorner = Instance.new("UICorner")
+colorScrollCorner.CornerRadius = UDim.new(0, 10)
+colorScrollCorner.Parent = colorScroll
+
+local colorGrid = Instance.new("UIGridLayout")
+colorGrid.CellSize = UDim2.new(0, 105, 0, 65)
+colorGrid.CellPadding = UDim2.new(0, 8, 0, 8)
+colorGrid.SortOrder = Enum.SortOrder.LayoutOrder
+colorGrid.Parent = colorScroll
+
+local colorScrollPadding = Instance.new("UIPadding")
+colorScrollPadding.PaddingLeft = UDim.new(0, 8)
+colorScrollPadding.PaddingTop = UDim.new(0, 8)
+colorScrollPadding.PaddingRight = UDim.new(0, 8)
+colorScrollPadding.PaddingBottom = UDim.new(0, 8)
+colorScrollPadding.Parent = colorScroll
+
+-- Extended Color Presets
+local colorPresets = {
+	{name = "Porcelain", color = Color3.fromRGB(255, 239, 224)},
+	{name = "Ivory", color = Color3.fromRGB(255, 228, 205)},
+	{name = "Light", color = Color3.fromRGB(255, 204, 153)},
+	{name = "Tan", color = Color3.fromRGB(245, 195, 160)},
+	{name = "Beige", color = Color3.fromRGB(227, 176, 141)},
+	{name = "Warm Beige", color = Color3.fromRGB(218, 165, 130)},
+	{name = "Brown", color = Color3.fromRGB(198, 134, 100)},
+	{name = "Caramel", color = Color3.fromRGB(186, 120, 88)},
+	{name = "Dark", color = Color3.fromRGB(160, 95, 53)},
+	{name = "Deep Brown", color = Color3.fromRGB(140, 85, 50)},
+	{name = "Darker", color = Color3.fromRGB(116, 67, 37)},
+	{name = "Espresso", color = Color3.fromRGB(100, 55, 30)},
+}
+
+for i, preset in ipairs(colorPresets) do
+	local colorBtn = Instance.new("TextButton")
+	colorBtn.BackgroundColor3 = preset.color
+	colorBtn.BorderSizePixel = 0
+	colorBtn.Text = preset.name
+	colorBtn.TextColor3 = preset.color.R + preset.color.G + preset.color.B > 1.5 and Color3.fromRGB(0, 0, 0) or Color3.fromRGB(255, 255, 255)
+	colorBtn.Font = Enum.Font.GothamBold
+	colorBtn.TextSize = 12
+	colorBtn.Parent = colorScroll
+	
+	local btnCorner = Instance.new("UICorner")
+	btnCorner.CornerRadius = UDim.new(0, 8)
+	btnCorner.Parent = colorBtn
+	
+	local btnStroke = Instance.new("UIStroke")
+	btnStroke.Color = Color3.fromRGB(255, 255, 255)
+	btnStroke.Thickness = 2
+	btnStroke.Transparency = 0.8
+	btnStroke.Parent = colorBtn
+	
+	colorBtn.MouseButton1Click:Connect(function()
+		for _, part in pairs(char:GetChildren()) do
+			if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+				part.Color = preset.color
+			end
+		end
+	end)
+end
+
+colorScroll.CanvasSize = UDim2.new(0, 0, 0, math.ceil(#colorPresets / 3) * 73 + 16)
+
+-- Save/Load Content
+local saveContent = Instance.new("Frame")
+saveContent.Size = UDim2.new(1, 0, 1, 0)
+saveContent.BackgroundTransparency = 1
+saveContent.Visible = false
+saveContent.Parent = contentFrame
+
+local saveLabel = Instance.new("TextLabel")
+saveLabel.Size = UDim2.new(1, -30, 0, 30)
+saveLabel.Position = UDim2.new(0, 15, 0, 5)
+saveLabel.BackgroundTransparency = 1
+saveLabel.Text = "💾 Save & Load Avatar"
+saveLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+saveLabel.Font = Enum.Font.GothamBold
+saveLabel.TextSize = 16
+saveLabel.TextXAlignment = Enum.TextXAlignment.Left
+saveLabel.Parent = saveContent
+
+local saveButton = Instance.new("TextButton")
+saveButton.Size = UDim2.new(1, -30, 0, 45)
+saveButton.Position = UDim2.new(0, 15, 0, 40)
+saveButton.BackgroundColor3 = Color3.fromRGB(67, 181, 129)
+saveButton.BorderSizePixel = 0
+saveButton.Text = "📸 Generate Avatar Code"
+saveButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+saveButton.Font = Enum.Font.GothamBold
+saveButton.TextSize = 15
+saveButton.Parent = saveContent
+
+local saveBtnCorner = Instance.new("UICorner")
+saveBtnCorner.CornerRadius = UDim.new(0, 8)
+saveBtnCorner.Parent = saveButton
+
+local codeLabel = Instance.new("TextLabel")
+codeLabel.Size = UDim2.new(1, -30, 0, 25)
+codeLabel.Position = UDim2.new(0, 15, 0, 95)
+codeLabel.BackgroundTransparency = 1
+codeLabel.Text = "Your Avatar Code:"
+codeLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+codeLabel.Font = Enum.Font.GothamBold
+codeLabel.TextSize = 14
+codeLabel.TextXAlignment = Enum.TextXAlignment.Left
+codeLabel.Parent = saveContent
+
+local codeBox = Instance.new("TextBox")
+codeBox.Size = UDim2.new(1, -30, 0, 150)
+codeBox.Position = UDim2.new(0, 15, 0, 125)
+codeBox.BackgroundColor3 = Color3.fromRGB(54, 57, 63)
+codeBox.BorderSizePixel = 0
+codeBox.Text = ""
+codeBox.PlaceholderText = "Avatar code will appear here..."
+codeBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+codeBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 130)
+codeBox.Font = Enum.Font.Code
+codeBox.TextSize = 11
+codeBox.TextWrapped = true
+codeBox.TextXAlignment = Enum.TextXAlignment.Left
+codeBox.TextYAlignment = Enum.TextYAlignment.Top
+codeBox.ClearTextOnFocus = false
+codeBox.MultiLine = true
+codeBox.Parent = saveContent
+
+local codeCorner = Instance.new("UICorner")
+codeCorner.CornerRadius = UDim.new(0, 8)
+codeCorner.Parent = codeBox
+
+local codePadding = Instance.new("UIPadding")
+codePadding.PaddingLeft = UDim.new(0, 8)
+codePadding.PaddingTop = UDim.new(0, 8)
+codePadding.PaddingRight = UDim.new(0, 8)
+codePadding.Parent = codeBox
+
+local loadButton = Instance.new("TextButton")
+loadButton.Size = UDim2.new(1, -30, 0, 45)
+loadButton.Position = UDim2.new(0, 15, 0, 285)
+loadButton.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+loadButton.BorderSizePixel = 0
+loadButton.Text = "🔄 Load Avatar from Code"
+loadButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+loadButton.Font = Enum.Font.GothamBold
+loadButton.TextSize = 15
+loadButton.Parent = saveContent
+
+local loadBtnCorner = Instance.new("UICorner")
+loadBtnCorner.CornerRadius = UDim.new(0, 8)
+loadBtnCorner.Parent = loadButton
+
+-- Status Label
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -30, 0, 25)
+statusLabel.Position = UDim2.new(0, 15, 1, -30)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "✓ Ready"
+statusLabel.TextColor3 = Color3.fromRGB(67, 181, 129)
+statusLabel.Font = Enum.Font.GothamBold
+statusLabel.TextSize = 13
+statusLabel.TextWrapped = true
+statusLabel.Parent = mainFrame
+
+-- Functions
+local function switchTab(tabName)
+	activeTab = tabName
+	searchContent.Visible = (tabName == "Search")
+	equippedContent.Visible = (tabName == "Equipped")
+	skinContent.Visible = (tabName == "Skin")
+	saveContent.Visible = (tabName == "Save")
+	
+	for name, btn in pairs(tabButtons) do
+		if name == tabName then
+			btn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+			btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		else
+			btn.BackgroundColor3 = Color3.fromRGB(54, 57, 63)
+			btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+		end
+	end
+end
+
+for name, btn in pairs(tabButtons) do
+	btn.MouseButton1Click:Connect(function()
+		switchTab(name)
+	end)
+end
+
+switchTab("Search")
+
+local isOpen = false
+toggleButton.MouseButton1Click:Connect(function()
+	isOpen = not isOpen
+	if isOpen then
+		mainFrame:TweenPosition(UDim2.new(1, -380, 0.04, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
+		toggleButton:TweenPosition(UDim2.new(1, -450, 0.5, -27.5), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
+		toggleButton.Text = "▶"
+		mainFrame.Visible = true
+	else
+		mainFrame:TweenPosition(UDim2.new(1, 0, 0.04, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
+		toggleButton:TweenPosition(UDim2.new(1, -70, 0.5, -27.5), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
+		toggleButton.Text = "◀"
+		wait(0.3)
+		mainFrame.Visible = false
+	end
+end)
+
+local function weldParts(p0, p1, c0, c1)
+	local w = Instance.new("Weld")
+	w.Part0, w.Part1, w.C0, w.C1, w.Parent = p0, p1, c0, c1, p0
+	return w
+end
+
+local function findAttachment(root, name)
+	for _, d in pairs(root:GetDescendants()) do
+		if d:IsA("Attachment") and d.Name == name then return d end
+	end
+end
+
+local function addAccessory(id)
+	local success = pcall(function()
+		local acc = game:GetObjects("rbxassetid://" .. id)[1]
+		acc.Parent = workspace
+		local h = acc:FindFirstChild("Handle")
+		h.CanCollide = false
+		local att = h:FindFirstChildOfClass("Attachment")
+		local parent
+		if att then
+			local found = findAttachment(char, att.Name)
+			parent = found and found.Parent or char:FindFirstChild("Head")
+			weldParts(parent, h, found and found.CFrame or CFrame.new(), att.CFrame)
+		else
+			parent = char:FindFirstChild("Head")
+			local ap = acc:FindFirstChild("AttachmentPoint")
+			weldParts(parent, h, ap and CFrame.new(0, parent.Size.Y/2, 0) or CFrame.new(), ap and ap.CFrame or CFrame.new())
+		end
+		acc.Parent = char
+		acc:SetAttribute("OriginalAssetID", id)
+		equippedItems[tostring(id)] = {item = acc, type = "Accessory"}
+		print("[DEBUG] Added accessory ID:", id)
+	end)
+	return success
+end
+
+local function equipClothing(id, cType)
+	print("[DEBUG] equipClothing called - ID:", id, "Type:", cType)
+	
+	local success = pcall(function()
+		-- First, remove old clothing of the same type
+		for _, v in pairs(char:GetChildren()) do
+			if v.ClassName == cType then 
+				print("[DEBUG] Found existing " .. cType .. " to remove")
+				local oldId = v:GetAttribute("OriginalAssetID")
+				if oldId then
+					print("[DEBUG] Removing old ID from equippedItems:", oldId)
+					equippedItems[tostring(oldId)] = nil
+				end
+				v:Destroy()
+			end
+		end
+		
+		-- Wait a tiny bit for the destroy to process
+		wait(0.05)
+		
+		-- Now create the new clothing
+		local clothing = Instance.new(cType)
+		
+		if cType == "Shirt" then
+			clothing.ShirtTemplate = "rbxassetid://" .. id
+			print("[DEBUG] Created shirt with template: rbxassetid://" .. id)
+		elseif cType == "Pants" then
+			clothing.PantsTemplate = "rbxassetid://" .. id
+			print("[DEBUG] Created pants with template: rbxassetid://" .. id)
+		end
+		
+		-- Set the attribute BEFORE parenting
+		clothing:SetAttribute("OriginalAssetID", tonumber(id))
+		print("[DEBUG] Set OriginalAssetID attribute to:", tonumber(id))
+		
+		-- Now parent it
+		clothing.Parent = char
+		print("[DEBUG] Parented " .. cType .. " to character")
+		
+		-- Add to equipped items
+		equippedItems[tostring(id)] = {item = clothing, type = cType}
+		print("[DEBUG] Added to equippedItems table - ID:", id, "Type:", cType)
+		print("[DEBUG] equippedItems now contains:", #equippedItems, "items")
+		
+		-- Debug: print all equipped items
+		for itemId, itemData in pairs(equippedItems) do
+			print("[DEBUG] - Item ID:", itemId, "Type:", itemData.type, "Item exists:", itemData.item ~= nil)
+		end
+	end)
+	
+	print("[DEBUG] equipClothing result:", success)
+	return success
+end
+
+local function equipFace(id)
+	print("[DEBUG] equipFace called - ID:", id)
+	
+	local success = pcall(function()
+		local h = char:FindFirstChild("Head")
+		if not h then 
+			print("[DEBUG] No head found!")
+			return 
+		end
+		
+		-- Remove old face
+		for _, v in pairs(h:GetChildren()) do
+			if v:IsA("Decal") and v.Name == "face" then 
+				print("[DEBUG] Found existing face to remove")
+				local oldId = v:GetAttribute("OriginalAssetID")
+				if oldId then
+					print("[DEBUG] Removing old face ID from equippedItems:", oldId)
+					equippedItems[tostring(oldId)] = nil
+				end
+				v:Destroy()
+			end
+		end
+		
+		-- Wait a tiny bit
+		wait(0.05)
+		
+		-- Create new face
+		local face = Instance.new("Decal")
+		face.Name = "face"
+		face.Texture = "rbxassetid://" .. id
+		face.Face = Enum.NormalId.Front
+		print("[DEBUG] Created face with texture: rbxassetid://" .. id)
+		
+		-- Set attribute BEFORE parenting
+		face:SetAttribute("OriginalAssetID", tonumber(id))
+		print("[DEBUG] Set OriginalAssetID attribute to:", tonumber(id))
+		
+		-- Parent it
+		face.Parent = h
+		print("[DEBUG] Parented face to head")
+		
+		-- Add to equipped items
+		equippedItems[tostring(id)] = {item = face, type = "Face"}
+		print("[DEBUG] Added face to equippedItems table - ID:", id)
+	end)
+	
+	print("[DEBUG] equipFace result:", success)
+	return success
+end
+
+local function updateEquipped()
+	print("[DEBUG] updateEquipped called - equippedItems count:", #equippedItems)
+	
+	for _, c in pairs(equippedScroll:GetChildren()) do
+		if c:IsA("Frame") then c:Destroy() end
+	end
+	
+	local count = 0
+	for id, data in pairs(equippedItems) do
+		count = count + 1
+		print("[DEBUG] Creating UI for item:", id, "Type:", data.type)
+		
+		local f = Instance.new("Frame")
+		f.Size = UDim2.new(1, -16, 0, 75)
+		f.BackgroundColor3 = Color3.fromRGB(54, 57, 63)
+		f.BorderSizePixel = 0
+		f.Parent = equippedScroll
+		
+		local fc = Instance.new("UICorner")
+		fc.CornerRadius = UDim.new(0, 8)
+		fc.Parent = f
+		
+		local t = Instance.new("ImageLabel")
+		t.Size = UDim2.new(0, 65, 0, 65)
+		t.Position = UDim2.new(0, 5, 0, 5)
+		t.BackgroundColor3 = Color3.fromRGB(32, 34, 37)
+		t.BorderSizePixel = 0
+		t.Image = "https://www.roblox.com/asset-thumbnail/image?assetId=" .. id .. "&width=150&height=150"
+		t.Parent = f
+		
+		local tc = Instance.new("UICorner")
+		tc.CornerRadius = UDim.new(0, 6)
+		tc.Parent = t
+		
+		local n = Instance.new("TextLabel")
+		n.Size = UDim2.new(1, -150, 0, 30)
+		n.Position = UDim2.new(0, 75, 0, 5)
+		n.BackgroundTransparency = 1
+		n.Text = data.type .. " #" .. id
+		n.TextColor3 = Color3.fromRGB(220, 220, 220)
+		n.Font = Enum.Font.GothamBold
+		n.TextSize = 13
+		n.TextXAlignment = Enum.TextXAlignment.Left
+		n.TextWrapped = true
+		n.Parent = f
+		
+		pcall(function()
+			local info = MarketplaceService:GetProductInfo(tonumber(id), Enum.InfoType.Asset)
+			if info then n.Text = info.Name end
+		end)
+		
+		local tl = Instance.new("TextLabel")
+		tl.Size = UDim2.new(1, -150, 0, 20)
+		tl.Position = UDim2.new(0, 75, 0, 40)
+		tl.BackgroundTransparency = 1
+		tl.Text = data.type
+		tl.TextColor3 = Color3.fromRGB(150, 150, 150)
+		tl.Font = Enum.Font.Gotham
+		tl.TextSize = 11
+		tl.TextXAlignment = Enum.TextXAlignment.Left
+		tl.Parent = f
+		
+		local r = Instance.new("TextButton")
+		r.Size = UDim2.new(0, 70, 0, 30)
+		r.Position = UDim2.new(1, -75, 0.5, -15)
+		r.BackgroundColor3 = Color3.fromRGB(237, 66, 69)
+		r.BorderSizePixel = 0
+		r.Text = "Remove"
+		r.TextColor3 = Color3.fromRGB(255, 255, 255)
+		r.Font = Enum.Font.GothamBold
+		r.TextSize = 12
+		r.Parent = f
+		
+		local rc = Instance.new("UICorner")
+		rc.CornerRadius = UDim.new(0, 6)
+		rc.Parent = r
+		
+		r.MouseButton1Click:Connect(function()
+			if data.item and data.item.Parent then 
+				data.item:Destroy()
+			end
+			equippedItems[id] = nil
+			wait(0.1)
+			updateEquipped()
+			statusLabel.Text = "✓ Item removed!"
+			statusLabel.TextColor3 = Color3.fromRGB(237, 66, 69)
+		end)
+	end
+	
+	print("[DEBUG] Created", count, "UI elements in equipped tab")
+	equippedScroll.CanvasSize = UDim2.new(0, 0, 0, equippedList.AbsoluteContentSize.Y + 16)
+end
+
+local function generateAvatarCode()
+	local codeLines = {}
+	table.insert(codeLines, "-- Avatar Code")
+	table.insert(codeLines, "local Players = game:GetService('Players')")
+	table.insert(codeLines, "local player = Players.LocalPlayer")
+	table.insert(codeLines, "local char = player.Character or player.CharacterAdded:Wait()")
+	table.insert(codeLines, "")
+	
+	-- Save body colors
+	table.insert(codeLines, "-- Body Colors")
+	for _, part in pairs(char:GetChildren()) do
+		if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+			local r = math.floor(part.Color.R * 255)
+			local g = math.floor(part.Color.G * 255)
+			local b = math.floor(part.Color.B * 255)
+			table.insert(codeLines, string.format("char['%s'].Color = Color3.fromRGB(%d, %d, %d)", part.Name, r, g, b))
+		end
+	end
+	
+	table.insert(codeLines, "")
+	table.insert(codeLines, "-- Helper Functions")
+	table.insert(codeLines, "local function weldParts(p0, p1, c0, c1)")
+	table.insert(codeLines, "    local w = Instance.new('Weld')")
+	table.insert(codeLines, "    w.Part0, w.Part1, w.C0, w.C1, w.Parent = p0, p1, c0, c1, p0")
+	table.insert(codeLines, "    return w")
+	table.insert(codeLines, "end")
+	table.insert(codeLines, "")
+	table.insert(codeLines, "local function findAttachment(root, name)")
+	table.insert(codeLines, "    for _, d in pairs(root:GetDescendants()) do")
+	table.insert(codeLines, "        if d:IsA('Attachment') and d.Name == name then return d end")
+	table.insert(codeLines, "    end")
+	table.insert(codeLines, "end")
+	table.insert(codeLines, "")
+	table.insert(codeLines, "-- Equip Function")
+	table.insert(codeLines, "local function equip(id, type)")
+	table.insert(codeLines, "    wait(0.2)")
+	table.insert(codeLines, "    pcall(function()")
+	table.insert(codeLines, "        if type == 'Accessory' then")
+	table.insert(codeLines, "            local acc = game:GetObjects('rbxassetid://'..id)[1]")
+	table.insert(codeLines, "            acc.Parent = workspace")
+	table.insert(codeLines, "            local h = acc:FindFirstChild('Handle')")
+	table.insert(codeLines, "            if h then")
+	table.insert(codeLines, "                h.CanCollide = false")
+	table.insert(codeLines, "                local att = h:FindFirstChildOfClass('Attachment')")
+	table.insert(codeLines, "                local parent")
+	table.insert(codeLines, "                if att then")
+	table.insert(codeLines, "                    local found = findAttachment(char, att.Name)")
+	table.insert(codeLines, "                    parent = found and found.Parent or char:FindFirstChild('Head')")
+	table.insert(codeLines, "                    weldParts(parent, h, found and found.CFrame or CFrame.new(), att.CFrame)")
+	table.insert(codeLines, "                else")
+	table.insert(codeLines, "                    parent = char:FindFirstChild('Head')")
+	table.insert(codeLines, "                    local ap = acc:FindFirstChild('AttachmentPoint')")
+	table.insert(codeLines, "                    weldParts(parent, h, ap and CFrame.new(0, parent.Size.Y/2, 0) or CFrame.new(), ap and ap.CFrame or CFrame.new())")
+	table.insert(codeLines, "                end")
+	table.insert(codeLines, "                acc.Parent = char")
+	table.insert(codeLines, "            end")
+	table.insert(codeLines, "        elseif type == 'Shirt' then")
+	table.insert(codeLines, "            for _, v in pairs(char:GetChildren()) do")
+	table.insert(codeLines, "                if v:IsA('Shirt') then v:Destroy() end")
+	table.insert(codeLines, "            end")
+	table.insert(codeLines, "            local shirt = Instance.new('Shirt', char)")
+	table.insert(codeLines, "            shirt.ShirtTemplate = 'rbxassetid://'..id")
+	table.insert(codeLines, "        elseif type == 'Pants' then")
+	table.insert(codeLines, "            for _, v in pairs(char:GetChildren()) do")
+	table.insert(codeLines, "                if v:IsA('Pants') then v:Destroy() end")
+	table.insert(codeLines, "            end")
+	table.insert(codeLines, "            local pants = Instance.new('Pants', char)")
+	table.insert(codeLines, "            pants.PantsTemplate = 'rbxassetid://'..id")
+	table.insert(codeLines, "        elseif type == 'Face' then")
+	table.insert(codeLines, "            local head = char:FindFirstChild('Head')")
+	table.insert(codeLines, "            if head then")
+	table.insert(codeLines, "                for _, v in pairs(head:GetChildren()) do")
+	table.insert(codeLines, "                    if v:IsA('Decal') and v.Name == 'face' then v:Destroy() end")
+	table.insert(codeLines, "                end")
+	table.insert(codeLines, "                local face = Instance.new('Decal', head)")
+	table.insert(codeLines, "                face.Name = 'face'")
+	table.insert(codeLines, "                face.Texture = 'rbxassetid://'..id")
+	table.insert(codeLines, "                face.Face = Enum.NormalId.Front")
+	table.insert(codeLines, "            end")
+	table.insert(codeLines, "        end")
+	table.insert(codeLines, "    end)")
+	table.insert(codeLines, "end")
+	table.insert(codeLines, "")
+	table.insert(codeLines, "-- Load Items")
+	
+	-- Collect all equipped items with their ORIGINAL asset IDs
+	local itemCount = 0
+	
+	-- Get items from equippedItems table (this has the correct IDs)
+	for id, data in pairs(equippedItems) do
+		itemCount = itemCount + 1
+		table.insert(codeLines, string.format("equip(%s, '%s')", id, data.type))
+	end
+	
+	table.insert(codeLines, "")
+	table.insert(codeLines, string.format("-- Total: %d items", itemCount))
+	
+	return table.concat(codeLines, "\n")
+end
+
+local function loadAvatarFromCode(code)
+	-- Simply execute the code
+	local success, err = pcall(function()
+		local func = loadstring(code)
+		if func then
+			func()
+		else
+			error("Failed to compile code")
+		end
+	end)
+	
+	if success then
+		return true
+	else
+		return false, err or "Failed to execute code"
+	end
+end
+
+saveButton.MouseButton1Click:Connect(function()
+	statusLabel.Text = "⏳ Generating code..."
+	statusLabel.TextColor3 = Color3.fromRGB(255, 255, 100)
+	
+	wait(0.3)
+	
+	local code = generateAvatarCode()
+	if code then
+		codeBox.Text = code
+		statusLabel.Text = "✓ Code generated! Copy it to save."
+		statusLabel.TextColor3 = Color3.fromRGB(67, 181, 129)
+	else
+		statusLabel.Text = "✗ Failed to generate code"
+		statusLabel.TextColor3 = Color3.fromRGB(237, 66, 69)
+	end
+end)
+
+loadButton.MouseButton1Click:Connect(function()
+	if codeBox.Text == "" then
+		statusLabel.Text = "✗ Please paste a code first"
+		statusLabel.TextColor3 = Color3.fromRGB(237, 66, 69)
+		return
+	end
+	
+	statusLabel.Text = "⏳ Loading avatar..."
+	statusLabel.TextColor3 = Color3.fromRGB(255, 255, 100)
+	
+	wait(0.3)
+	
+	local success, err = loadAvatarFromCode(codeBox.Text)
+	if success then
+		statusLabel.Text = "✓ Avatar loaded successfully!"
+		statusLabel.TextColor3 = Color3.fromRGB(67, 181, 129)
+		wait(1)
+		updateEquipped()
+	else
+		statusLabel.Text = "✗ " .. (err or "Failed to load")
+		statusLabel.TextColor3 = Color3.fromRGB(237, 66, 69)
+	end
+end)
+
+local function autoEquip(id)
+	print("[DEBUG] autoEquip called with ID:", id)
+	statusLabel.Text = "⏳ Loading..."
+	statusLabel.TextColor3 = Color3.fromRGB(255, 255, 100)
+	
+	local mainSuccess = pcall(function()
+		local info = MarketplaceService:GetProductInfo(id, Enum.InfoType.Asset)
+		print("[DEBUG] Got product info - Name:", info.Name, "AssetTypeId:", info.AssetTypeId)
+		
+		local t = info.AssetTypeId
+		local s, r
+		
+		if t == 8 or t == 41 or t == 42 or t == 43 or t == 44 or t == 45 or t == 46 or t == 47 or t == 64 or t == 65 then
+			print("[DEBUG] Detected as accessory")
+			s, r = addAccessory(id)
+		elseif t == 11 then 
+			print("[DEBUG] Detected as shirt")
+			s = equipClothing(id, "Shirt")
+		elseif t == 12 then 
+			print("[DEBUG] Detected as pants")
+			s = equipClothing(id, "Pants")
+		elseif t == 18 then 
+			print("[DEBUG] Detected as face")
+			s = equipFace(id)
+		else
+			print("[DEBUG] Unknown asset type:", t)
+		end
+		
+		if s then
+			print("[DEBUG] Equipment successful, calling updateEquipped")
+			statusLabel.Text = "✓ Equipped: " .. info.Name
+			statusLabel.TextColor3 = Color3.fromRGB(67, 181, 129)
+			wait(0.1)
+			updateEquipped()
+		else
+			print("[DEBUG] Equipment failed")
+			statusLabel.Text = "✗ Failed to equip item"
+			statusLabel.TextColor3 = Color3.fromRGB(237, 66, 69)
+		end
+	end)
+	
+	if not mainSuccess then
+		print("[DEBUG] autoEquip failed completely")
+		statusLabel.Text = "✗ Error loading item"
+		statusLabel.TextColor3 = Color3.fromRGB(237, 66, 69)
+	end
+end
+
+searchButton.MouseButton1Click:Connect(function()
+	local id = tonumber(searchBox.Text)
+	if id then 
+		autoEquip(id) 
+	else 
+		statusLabel.Text = "✗ Invalid Asset ID"
+		statusLabel.TextColor3 = Color3.fromRGB(237, 66, 69)
+	end
+end)
+
+searchBox.FocusLost:Connect(function(e)
+	if e then
+		local id = tonumber(searchBox.Text)
+		if id then autoEquip(id) end
+	end
+end)
+
+player.CharacterAdded:Connect(function(newChar)
+	char = newChar
+	equippedItems = {}
+	updateEquipped()
+end)
+
+print("[DEBUG] Script loaded successfully!")
