@@ -563,7 +563,7 @@ local function updateEquipped()
 		fc.CornerRadius = UDim.new(0, 8)
 		fc.Parent = f
 		
-		local t = Instance.new("ImageLabel")
+local t = Instance.new("ImageLabel")
 		t.Size = UDim2.new(0, 65, 0, 65)
 		t.Position = UDim2.new(0, 5, 0, 5)
 		t.BackgroundColor3 = Color3.fromRGB(32, 34, 37)
@@ -636,13 +636,87 @@ end
 local function generateAvatarCode()
 	local avatarData = {
 		items = {},
-		colors = {}
+		colors = {},
+		bodyColors = {}
 	}
 	
-	for id, data in pairs(equippedItems) do
-		table.insert(avatarData.items, {id = id, type = data.type})
+	-- Scan ALL accessories on character
+	for _, item in pairs(char:GetChildren()) do
+		if item:IsA("Accessory") then
+			local handle = item:FindFirstChild("Handle")
+			if handle then
+				local textureId = nil
+				-- Try to find texture ID from meshes
+				for _, child in pairs(handle:GetDescendants()) do
+					if child:IsA("SpecialMesh") and child.TextureId ~= "" then
+						textureId = child.TextureId:match("%d+")
+						break
+					end
+				end
+				
+				-- Extract asset ID from accessory name or handle
+				local assetId = item:GetAttribute("AssetId")
+				if not assetId and handle:FindFirstChild("OriginalSize") then
+					-- Try to extract from accessory properties
+					local success, productInfo = pcall(function()
+						return MarketplaceService:GetProductInfo(tonumber(item.Name:match("%d+")), Enum.InfoType.Asset)
+					end)
+					if success then
+						assetId = tonumber(item.Name:match("%d+"))
+					end
+				end
+				
+				if assetId or textureId then
+					table.insert(avatarData.items, {
+						id = assetId or tonumber(textureId),
+						type = "Accessory",
+						name = item.Name
+					})
+				end
+			end
+		elseif item:IsA("Shirt") then
+			local shirtId = item.ShirtTemplate:match("%d+")
+			if shirtId then
+				table.insert(avatarData.items, {
+					id = tonumber(shirtId),
+					type = "Shirt"
+				})
+			end
+		elseif item:IsA("Pants") then
+			local pantsId = item.PantsTemplate:match("%d+")
+			if pantsId then
+				table.insert(avatarData.items, {
+					id = tonumber(pantsId),
+					type = "Pants"
+				})
+			end
+		elseif item:IsA("ShirtGraphic") then
+			local graphicId = item.Graphic:match("%d+")
+			if graphicId then
+				table.insert(avatarData.items, {
+					id = tonumber(graphicId),
+					type = "ShirtGraphic"
+				})
+			end
+		end
 	end
 	
+	-- Get face
+	local head = char:FindFirstChild("Head")
+	if head then
+		local face = head:FindFirstChild("face")
+		if face and face:IsA("Decal") then
+			local faceId = face.Texture:match("%d+")
+			if faceId then
+				table.insert(avatarData.items, {
+					id = tonumber(faceId),
+					type = "Face"
+				})
+			end
+		end
+	end
+	
+	-- Save body part colors
 	for _, part in pairs(char:GetChildren()) do
 		if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
 			avatarData.colors[part.Name] = {
@@ -651,6 +725,19 @@ local function generateAvatarCode()
 				B = math.floor(part.Color.B * 255)
 			}
 		end
+	end
+	
+	-- Save BodyColors if they exist
+	local bodyColors = char:FindFirstChild("Body Colors")
+	if bodyColors then
+		avatarData.bodyColors = {
+			HeadColor = bodyColors.HeadColor3,
+			TorsoColor = bodyColors.TorsoColor3,
+			LeftArmColor = bodyColors.LeftArmColor3,
+			RightArmColor = bodyColors.RightArmColor3,
+			LeftLegColor = bodyColors.LeftLegColor3,
+			RightLegColor = bodyColors.RightLegColor3
+		}
 	end
 	
 	local success, encoded = pcall(function()
