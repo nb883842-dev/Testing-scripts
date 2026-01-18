@@ -1,13 +1,17 @@
--- Enhanced Avatar Catalog Browser - FIXED VERSION
+-- Enhanced Avatar Catalog Browser - FIXED VERSION WITH BUNDLES & INFINITE SCROLL
 -- Place this in StarterGui or StarterPlayerScripts
 
 local Players = game:GetService("Players")
 local MarketplaceService = game:GetService("MarketplaceService")
+local InsertService = game:GetService("InsertService")
 local player = Players.LocalPlayer
 local char = player.Character or player.CharacterAdded:Wait()
 
 local equippedItems = {}
 local currentCategory = "Accessories"
+local currentPage = 1
+local itemsPerPage = 15
+local isLoadingMore = false
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "CatalogBrowserGUI"
@@ -56,7 +60,7 @@ topCorner.CornerRadius = UDim.new(0, 12)
 topCorner.Parent = topBar
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -10, 1, 0)
+title.Size = UDim2.new(1, -50, 1, 0)
 title.Position = UDim2.new(0, 10, 0, 0)
 title.BackgroundTransparency = 1
 title.Text = "Avatar Catalog"
@@ -65,6 +69,26 @@ title.Font = Enum.Font.GothamBold
 title.TextSize = 18
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Parent = topBar
+
+-- Close Button
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0, 35, 0, 35)
+closeButton.Position = UDim2.new(1, -40, 0, 5)
+closeButton.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+closeButton.BorderSizePixel = 0
+closeButton.Text = "✕"
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.Font = Enum.Font.GothamBold
+closeButton.TextSize = 18
+closeButton.Parent = topBar
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 8)
+closeCorner.Parent = closeButton
+
+closeButton.MouseButton1Click:Connect(function()
+	screenGui:Destroy()
+end)
 
 -- Tabs
 local tabsFrame = Instance.new("Frame")
@@ -110,17 +134,18 @@ catalogContent.BackgroundTransparency = 1
 catalogContent.Visible = true
 catalogContent.Parent = contentFrame
 
--- Category buttons
+-- Category buttons with more items
 local categories = {
-	{name = "Hats", ids = {607702162, 1029025, 20573078, 13510352, 31101391}},
-	{name = "Hair", ids = {4819740796, 86896488, 48474313, 62234425, 72636064}},
-	{name = "Faces", ids = {7074786, 28118994, 17879870, 21635489, 24187522}},
-	{name = "Shirts", ids = {6916964681, 5327691274, 1340882082, 607785314, 144076759}},
-	{name = "Pants", ids = {6916979608, 5327695327, 1340884352, 129458426, 86896580}}
+	{name = "Hats", ids = {607702162, 1029025, 20573078, 13510352, 31101391, 11748356, 1285307, 15630952, 13424608, 12259089, 21070012, 11884330, 1235488, 3443393, 13423624, 98346834, 1374269, 11419319, 13510362, 607700713}},
+	{name = "Hair", ids = {4819740796, 86896488, 48474313, 62234425, 72636064, 48474294, 11419729, 16630147, 13431858, 86500036, 86500069, 19133785, 11377306, 11748551, 86500008, 130870206, 151784320, 398633812, 183155480, 480083298}},
+	{name = "Faces", ids = {7074786, 28118994, 17879870, 21635489, 24187522, 22999644, 20418518, 143220974, 26128457, 29873780, 40725418, 41346025, 41346394, 46113133, 113751359, 32356477, 20722130, 21635513, 31117267, 62234551}},
+	{name = "Shirts", ids = {6916964681, 5327691274, 1340882082, 607785314, 144076759, 2568126725, 1148313272, 1148312884, 4819738709, 5487298755, 6856274389, 1272714, 538326, 3967797, 1340878163, 7652401378}},
+	{name = "Pants", ids = {6916979608, 5327695327, 1340884352, 129458426, 86896580, 2568127874, 1148314017, 1148314299, 4819739796, 5487300691, 6856275317, 1272944, 538379, 3967825, 1340879504, 7652402533}},
+	{name = "Bundles", ids = {607, 480, 84, 369, 410, 411, 412, 481, 482, 483, 484, 485, 486, 487, 488, 489, 490, 491, 492, 493}}
 }
 
 local categoryFrame = Instance.new("Frame")
-categoryFrame.Size = UDim2.new(1, -20, 0, 60)
+categoryFrame.Size = UDim2.new(1, -20, 0, 90)
 categoryFrame.Position = UDim2.new(0, 10, 0, 5)
 categoryFrame.BackgroundTransparency = 1
 categoryFrame.Parent = catalogContent
@@ -132,7 +157,7 @@ for i, cat in ipairs(categories) do
 	
 	local catBtn = Instance.new("TextButton")
 	catBtn.Size = UDim2.new(0.33, -5, 0, 25)
-	catBtn.Position = UDim2.new(col * 0.33, 0, row * 0.5, 0)
+	catBtn.Position = UDim2.new(col * 0.33, 0, row * 0.33, 0)
 	catBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
 	catBtn.BorderSizePixel = 0
 	catBtn.Text = cat.name
@@ -149,6 +174,7 @@ for i, cat in ipairs(categories) do
 	
 	catBtn.MouseButton1Click:Connect(function()
 		currentCategory = cat.name
+		currentPage = 1
 		for name, btn in pairs(catButtons) do
 			if name == cat.name then
 				btn.BackgroundColor3 = Color3.fromRGB(70, 130, 250)
@@ -156,7 +182,7 @@ for i, cat in ipairs(categories) do
 				btn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
 			end
 		end
-		loadCatalogItems(cat.ids)
+		loadCatalogItems(cat.ids, true)
 	end)
 end
 
@@ -166,11 +192,11 @@ catButtons["Hats"].BackgroundColor3 = Color3.fromRGB(70, 130, 250)
 -- Search box
 local searchBox = Instance.new("TextBox")
 searchBox.Size = UDim2.new(1, -20, 0, 35)
-searchBox.Position = UDim2.new(0, 10, 0, 70)
+searchBox.Position = UDim2.new(0, 10, 0, 100)
 searchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 searchBox.BorderSizePixel = 0
 searchBox.Text = ""
-searchBox.PlaceholderText = "Paste Asset ID..."
+searchBox.PlaceholderText = "Paste Asset ID or Bundle ID..."
 searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 searchBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 130)
 searchBox.Font = Enum.Font.Gotham
@@ -183,8 +209,8 @@ searchCorner.Parent = searchBox
 
 -- Catalog scroll
 local catalogScroll = Instance.new("ScrollingFrame")
-catalogScroll.Size = UDim2.new(1, -20, 1, -115)
-catalogScroll.Position = UDim2.new(0, 10, 0, 110)
+catalogScroll.Size = UDim2.new(1, -20, 1, -145)
+catalogScroll.Position = UDim2.new(0, 10, 0, 140)
 catalogScroll.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 catalogScroll.BorderSizePixel = 0
 catalogScroll.ScrollBarThickness = 4
@@ -235,7 +261,7 @@ equippedPadding.PaddingTop = UDim.new(0, 5)
 equippedPadding.PaddingRight = UDim.new(0, 5)
 equippedPadding.Parent = equippedScroll
 
--- SKIN TAB with Enhanced Color Wheel
+-- SKIN TAB
 local skinContent = Instance.new("Frame")
 skinContent.Size = UDim2.new(1, 0, 1, 0)
 skinContent.BackgroundTransparency = 1
@@ -253,7 +279,7 @@ skinLabel.TextSize = 14
 skinLabel.TextXAlignment = Enum.TextXAlignment.Left
 skinLabel.Parent = skinContent
 
--- Enhanced Color Wheel with more colors
+-- Color Wheel
 local wheelSize = 240
 local wheelFrame = Instance.new("Frame")
 wheelFrame.Size = UDim2.new(0, wheelSize, 0, wheelSize)
@@ -261,9 +287,7 @@ wheelFrame.Position = UDim2.new(0.5, -wheelSize/2, 0, 45)
 wheelFrame.BackgroundTransparency = 1
 wheelFrame.Parent = skinContent
 
--- Create comprehensive color wheel
 local colorWheel = {
-	-- Inner ring - Skin tones
 	{angle = 0, radius = 45, color = Color3.fromRGB(255, 220, 177), name = "Pale"},
 	{angle = 45, radius = 45, color = Color3.fromRGB(255, 204, 153), name = "Light"},
 	{angle = 90, radius = 45, color = Color3.fromRGB(245, 195, 160), name = "Tan"},
@@ -272,8 +296,6 @@ local colorWheel = {
 	{angle = 225, radius = 45, color = Color3.fromRGB(160, 95, 53), name = "Dark"},
 	{angle = 270, radius = 45, color = Color3.fromRGB(116, 67, 37), name = "Darker"},
 	{angle = 315, radius = 45, color = Color3.fromRGB(92, 52, 24), name = "Deep"},
-	
-	-- Middle ring - Vibrant colors
 	{angle = 0, radius = 90, color = Color3.fromRGB(255, 0, 0), name = "Red"},
 	{angle = 30, radius = 90, color = Color3.fromRGB(255, 127, 0), name = "Orange"},
 	{angle = 60, radius = 90, color = Color3.fromRGB(255, 255, 0), name = "Yellow"},
@@ -286,8 +308,6 @@ local colorWheel = {
 	{angle = 270, radius = 90, color = Color3.fromRGB(127, 0, 255), name = "Purple"},
 	{angle = 300, radius = 90, color = Color3.fromRGB(255, 0, 255), name = "Magenta"},
 	{angle = 330, radius = 90, color = Color3.fromRGB(255, 0, 127), name = "Pink"},
-	
-	-- Center colors
 	{angle = 0, radius = 0, color = Color3.fromRGB(255, 255, 255), name = "White"},
 	{angle = 90, radius = 0, color = Color3.fromRGB(128, 128, 128), name = "Gray"},
 	{angle = 180, radius = 0, color = Color3.fromRGB(64, 64, 64), name = "Dark Gray"},
@@ -299,7 +319,6 @@ for _, preset in ipairs(colorWheel) do
 	local x, y
 	
 	if preset.radius == 0 then
-		-- Center colors in a small cross pattern
 		if preset.angle == 0 then x, y = 0, -25
 		elseif preset.angle == 90 then x, y = 25, 0
 		elseif preset.angle == 180 then x, y = 0, 25
@@ -325,7 +344,6 @@ for _, preset in ipairs(colorWheel) do
 	btnCorner.CornerRadius = UDim.new(1, 0)
 	btnCorner.Parent = colorBtn
 	
-	-- Tooltip
 	local tooltip = Instance.new("TextLabel")
 	tooltip.Size = UDim2.new(0, 70, 0, 20)
 	tooltip.Position = UDim2.new(0.5, -35, 1, 5)
@@ -375,50 +393,6 @@ statusLabel.Font = Enum.Font.Gotham
 statusLabel.TextSize = 11
 statusLabel.TextWrapped = true
 statusLabel.Parent = mainFrame
-
--- Tab switching
-local function switchTab(tabName)
-	activeTab = tabName
-	catalogContent.Visible = (tabName == "Catalog")
-	equippedContent.Visible = (tabName == "Equipped")
-	skinContent.Visible = (tabName == "Skin")
-	
-	for name, btn in pairs(tabButtons) do
-		if name == tabName then
-			btn.BackgroundColor3 = Color3.fromRGB(70, 130, 250)
-			btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-		else
-			btn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-			btn.TextColor3 = Color3.fromRGB(200, 200, 200)
-		end
-	end
-end
-
-for name, btn in pairs(tabButtons) do
-	btn.MouseButton1Click:Connect(function()
-		switchTab(name)
-	end)
-end
-
-switchTab("Catalog")
-
--- Toggle
-local isOpen = false
-toggleButton.MouseButton1Click:Connect(function()
-	isOpen = not isOpen
-	if isOpen then
-		mainFrame:TweenPosition(UDim2.new(1, -340, 0.05, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
-		toggleButton:TweenPosition(UDim2.new(1, -400, 0.5, -25), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
-		toggleButton.Text = "▶"
-		mainFrame.Visible = true
-	else
-		mainFrame:TweenPosition(UDim2.new(1, 0, 0.05, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
-		toggleButton:TweenPosition(UDim2.new(1, -60, 0.5, -25), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
-		toggleButton.Text = "◀"
-		wait(0.3)
-		mainFrame.Visible = false
-	end
-end)
 
 -- Helper functions
 local function weldParts(p0, p1, c0, c1)
@@ -484,15 +458,27 @@ local function equipFace(id)
 end
 
 local function equipBundle(bundleId)
-	pcall(function()
+	statusLabel.Text = "Loading bundle..."
+	statusLabel.TextColor3 = Color3.fromRGB(255, 255, 100)
+	
+	local success = pcall(function()
 		local bundleInfo = MarketplaceService:GetProductInfo(bundleId, Enum.InfoType.Bundle)
 		if bundleInfo and bundleInfo.BundledItems then
 			for _, item in pairs(bundleInfo.BundledItems) do
-				wait(0.1)
+				wait(0.2)
 				autoEquip(item.Id)
 			end
+			statusLabel.Text = "Bundle equipped!"
+			statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
 		end
 	end)
+	
+	if not success then
+		statusLabel.Text = "Bundle load failed"
+		statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+	end
+	
+	return success
 end
 
 local function updateEquipped()
@@ -517,9 +503,11 @@ local function updateEquipped()
 		n.Text, n.TextColor3, n.Font, n.TextSize = data.type .. " #" .. id, Color3.fromRGB(220, 220, 220), Enum.Font.Gotham, 11
 		n.TextXAlignment, n.TextWrapped, n.Parent = Enum.TextXAlignment.Left, true, f
 		
-		pcall(function()
-			local info = MarketplaceService:GetProductInfo(id, Enum.InfoType.Asset)
-			if info then n.Text = info.Name end
+		spawn(function()
+			pcall(function()
+				local info = MarketplaceService:GetProductInfo(id, Enum.InfoType.Asset)
+				if info then n.Text = info.Name end
+			end)
 		end)
 		
 		local tl = Instance.new("TextLabel")
@@ -546,31 +534,57 @@ end
 
 function autoEquip(id)
 	statusLabel.Text, statusLabel.TextColor3 = "Loading...", Color3.fromRGB(255, 255, 100)
-	pcall(function()
-		local info = MarketplaceService:GetProductInfo(id, Enum.InfoType.Asset)
-		local t = info.AssetTypeId
-		local s, r
-		if t == 8 or t == 41 or t == 42 or t == 43 or t == 44 or t == 45 or t == 46 or t == 47 or t == 64 or t == 65 then
-			s, r = addAccessory(id)
-		elseif t == 11 then s, r = equipClothing(id, "Shirt")
-		elseif t == 12 then s, r = equipClothing(id, "Pants")
-		elseif t == 2 then s, r = equipClothing(id, "ShirtGraphic")
-		elseif t == 18 then s, r = equipFace(id)
-		elseif info.AssetType == "Bundle" then
+	
+	local success = pcall(function()
+		local info = MarketplaceService:GetProductInfo(id)
+		local assetType = info.AssetTypeId
+		
+		-- Check if it's a bundle first
+		if info.ProductType == "Bundle" or info.AssetType == "Bundle" then
 			equipBundle(id)
-			s = true
+			return
 		end
-		if s then
-			statusLabel.Text, statusLabel.TextColor3 = "Equipped!", Color3.fromRGB(100, 255, 100)
+		
+		-- Handle different asset types
+		local equipped = false
+		
+		-- Accessories
+		if assetType == 8 or assetType == 41 or assetType == 42 or assetType == 43 or 
+		   assetType == 44 or assetType == 45 or assetType == 46 or assetType == 47 or 
+		   assetType == 64 or assetType == 65 then
+			equipped = addAccessory(id)
+		-- Shirt
+		elseif assetType == 11 then
+			equipped = equipClothing(id, "Shirt")
+		-- Pants
+		elseif assetType == 12 then
+			equipped = equipClothing(id, "Pants")
+		-- T-Shirt
+		elseif assetType == 2 then
+			equipped = equipClothing(id, "ShirtGraphic")
+		-- Face
+		elseif assetType == 18 then
+			equipped = equipFace(id)
+		end
+		
+		if equipped then
+			statusLabel.Text = "Equipped!"
+			statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
 			updateEquipped()
 		else
-			statusLabel.Text, statusLabel.TextColor3 = "Error", Color3.fromRGB(255, 100, 100)
+			statusLabel.Text = "Unsupported type"
+			statusLabel.TextColor3 = Color3.fromRGB(255, 150, 100)
 		end
 	end)
+	
+	if not success then
+		statusLabel.Text = "Error loading item"
+		statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+	end
 end
 
 -- Create catalog item card
-local function createItemCard(itemId)
+local function createItemCard(itemId, isBundle)
 	local card = Instance.new("Frame")
 	card.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 	card.BorderSizePixel = 0
@@ -585,7 +599,12 @@ local function createItemCard(itemId)
 	img.Position = UDim2.new(0, 3, 0, 3)
 	img.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 	img.BorderSizePixel = 0
-	img.Image = "https://www.roblox.com/asset-thumbnail/image?assetId=" .. itemId .. "&width=150&height=150"
+	
+	if isBundle then
+		img.Image = "https://www.roblox.com/bundle-thumbnail/image?bundleId=" .. itemId .. "&width=420&height=420&format=png"
+	else
+		img.Image = "https://www.roblox.com/asset-thumbnail/image?assetId=" .. itemId .. "&width=150&height=150"
+	end
 	img.Parent = card
 	
 	local imgCorner = Instance.new("UICorner")
@@ -607,7 +626,12 @@ local function createItemCard(itemId)
 	-- Load real name
 	spawn(function()
 		pcall(function()
-			local info = MarketplaceService:GetProductInfo(itemId, Enum.InfoType.Asset)
+			local info
+			if isBundle then
+				info = MarketplaceService:GetProductInfo(itemId, Enum.InfoType.Bundle)
+			else
+				info = MarketplaceService:GetProductInfo(itemId, Enum.InfoType.Asset)
+			end
 			if info then
 				name.Text = info.Name
 			end
@@ -619,7 +643,7 @@ local function createItemCard(itemId)
 	equipBtn.Position = UDim2.new(0, 3, 1, -21)
 	equipBtn.BackgroundColor3 = Color3.fromRGB(70, 130, 250)
 	equipBtn.BorderSizePixel = 0
-	equipBtn.Text = "Equip"
+	equipBtn.Text = isBundle and "Equip Bundle" or "Equip"
 	equipBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	equipBtn.Font = Enum.Font.GothamBold
 	equipBtn.TextSize = 10
@@ -635,37 +659,140 @@ local function createItemCard(itemId)
 end
 
 -- Load catalog items function
-function loadCatalogItems(itemIds)
-	-- Clear existing
-	for _, child in pairs(catalogScroll:GetChildren()) do
-		if child:IsA("Frame") then
-			child:Destroy()
+function loadCatalogItems(itemIds, clearExisting)
+	if clearExisting then
+		-- Clear existing items
+		for _, child in pairs(catalogScroll:GetChildren()) do
+			if child:IsA("Frame") then
+				child:Destroy()
+			end
 		end
+		currentPage = 1
 	end
 	
 	statusLabel.Text = "Loading items..."
 	statusLabel.TextColor3 = Color3.fromRGB(255, 255, 100)
 	
+	-- Determine if this is the Bundles category
+	local isBundle = currentCategory == "Bundles"
+	
+	-- Calculate which items to show
+	local startIdx = (currentPage - 1) * itemsPerPage + 1
+	local endIdx = math.min(currentPage * itemsPerPage, #itemIds)
+	
 	-- Load each item with delay to prevent lag
-	for i, itemId in ipairs(itemIds) do
-		createItemCard(itemId)
-		if i % 3 == 0 then
-			wait(0.05) -- Small delay every 3 items
+	for i = startIdx, endIdx do
+		if itemIds[i] then
+			createItemCard(itemIds[i], isBundle)
+			if (i - startIdx) % 3 == 0 then
+				wait(0.05) -- Small delay every 3 items
+			end
 		end
 	end
 	
 	catalogScroll.CanvasSize = UDim2.new(0, 0, 0, catalogGrid.AbsoluteContentSize.Y + 10)
-	statusLabel.Text = "Ready"
+	statusLabel.Text = "Ready - Page " .. currentPage
 	statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
 end
+
+-- Infinite scroll detection
+catalogScroll:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+	if isLoadingMore then return end
+	
+	local scrollPosition = catalogScroll.CanvasPosition.Y
+	local scrollHeight = catalogScroll.AbsoluteCanvasSize.Y
+	local frameHeight = catalogScroll.AbsoluteSize.Y
+	
+	-- Check if scrolled near bottom (within 50 pixels)
+	if scrollPosition + frameHeight >= scrollHeight - 50 then
+		-- Find current category data
+		for _, cat in ipairs(categories) do
+			if cat.name == currentCategory then
+				local maxPages = math.ceil(#cat.ids / itemsPerPage)
+				
+				if currentPage < maxPages then
+					isLoadingMore = true
+					currentPage = currentPage + 1
+					
+					statusLabel.Text = "Loading more..."
+					statusLabel.TextColor3 = Color3.fromRGB(255, 255, 100)
+					
+					wait(0.3) -- Debounce
+					loadCatalogItems(cat.ids, false)
+					
+					isLoadingMore = false
+				end
+				break
+			end
+		end
+	end
+end)
+
+-- Tab switching
+local function switchTab(tabName)
+	activeTab = tabName
+	catalogContent.Visible = (tabName == "Catalog")
+	equippedContent.Visible = (tabName == "Equipped")
+	skinContent.Visible = (tabName == "Skin")
+	
+	for name, btn in pairs(tabButtons) do
+		if name == tabName then
+			btn.BackgroundColor3 = Color3.fromRGB(70, 130, 250)
+			btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		else
+			btn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+			btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+		end
+	end
+	
+	-- Update equipped tab when switching to it
+	if tabName == "Equipped" then
+		updateEquipped()
+	end
+end
+
+for name, btn in pairs(tabButtons) do
+	btn.MouseButton1Click:Connect(function()
+		switchTab(name)
+	end)
+end
+
+switchTab("Catalog")
+
+-- Toggle functionality
+local isOpen = false
+toggleButton.MouseButton1Click:Connect(function()
+	isOpen = not isOpen
+	if isOpen then
+		mainFrame:TweenPosition(UDim2.new(1, -340, 0.05, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
+		toggleButton:TweenPosition(UDim2.new(1, -400, 0.5, -25), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
+		toggleButton.Text = "▶"
+		mainFrame.Visible = true
+	else
+		mainFrame:TweenPosition(UDim2.new(1, 0, 0.05, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
+		toggleButton:TweenPosition(UDim2.new(1, -60, 0.5, -25), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
+		toggleButton.Text = "◀"
+		wait(0.3)
+		mainFrame.Visible = false
+	end
+end)
 
 -- Search functionality
 searchBox.FocusLost:Connect(function(enterPressed)
 	if enterPressed then
-		local query = searchBox.Text
+		local query = searchBox.Text:gsub("%s+", "") -- Remove spaces
 		local id = tonumber(query)
 		if id then
-			autoEquip(id)
+			-- Try to determine if it's a bundle or asset
+			pcall(function()
+				local info = MarketplaceService:GetProductInfo(id)
+				if info.ProductType == "Bundle" or info.AssetType == "Bundle" then
+					equipBundle(id)
+				else
+					autoEquip(id)
+				end
+			end)
+			searchBox.Text = ""
 		else
 			statusLabel.Text = "Enter a valid ID"
 			statusLabel.TextColor3 = Color3.fromRGB(255, 150, 100)
@@ -674,11 +801,13 @@ searchBox.FocusLost:Connect(function(enterPressed)
 end)
 
 -- Load initial catalog items (Hats category)
-loadCatalogItems(categories[1].ids)
+loadCatalogItems(categories[1].ids, true)
 
--- Character respawn
+-- Character respawn handler
 player.CharacterAdded:Connect(function(newChar)
 	char = newChar
 	equippedItems = {}
 	updateEquipped()
+	statusLabel.Text = "Character respawned"
+	statusLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
 end)
