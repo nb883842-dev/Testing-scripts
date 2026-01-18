@@ -1,0 +1,162 @@
+-- MoonSec Obfuscated Script
+-- Custom VM Bytecode Interpreter with Control Flow Flattening
+local _0xA7B3C = (function()
+    local _0x4E2F1 = {
+        [1] = "\83\101\114\118\105\99\101\115",
+        [2] = "\80\108\97\121\101\114\115",
+        [3] = "\76\111\99\97\108\80\108\97\121\101\114",
+        [4] = "\80\108\97\121\101\114\71\117\105",
+        [5] = "\87\97\105\116\70\111\114\67\104\105\108\100",
+        [6] = "\73\110\115\116\97\110\99\101",
+        [7] = "\110\101\119",
+        [8] = "\83\99\114\101\101\110\71\117\105",
+        [9] = "\78\97\109\101",
+        [10] = "\84\101\115\116\71\117\105",
+        [11] = "\80\97\114\101\110\116",
+        [12] = "\84\101\120\116\76\97\98\101\108",
+        [13] = "\83\105\122\101",
+        [14] = "\102\114\111\109\83\99\97\108\101",
+        [15] = "\80\111\115\105\116\105\111\110",
+        [16] = "\66\97\99\107\103\114\111\117\110\100\84\114\97\110\115\112\97\114\101\110\99\121",
+        [17] = "\84\101\120\116",
+        [18] = "\116\101\115\116",
+        [19] = "\84\101\120\116\83\99\97\108\101\100",
+        [20] = "\84\101\120\116\67\111\108\111\114\51",
+        [21] = "\70\111\110\116",
+        [22] = "\69\110\117\109",
+        [23] = "\83\111\117\114\99\101\83\97\110\115\66\111\108\100",
+        [24] = "\103\97\109\101",
+        [25] = "\85\68\105\109\50",
+        [26] = "\67\111\108\111\114\51"
+    }
+    
+    local _0x9D8E2 = function(_0xB1C4A)
+        local _0xF3E7D = {}
+        for _0x2A8C6 = 1, #_0xB1C4A do
+            _0xF3E7D[_0x2A8C6] = string.char(_0xB1C4A:byte(_0x2A8C6))
+        end
+        return table.concat(_0xF3E7D)
+    end
+    
+    return _0x4E2F1
+end)()
+
+-- Junk Code Layer 1
+local _0x1F9A8 = math.random(1000, 9999)
+local _0x6C3D7 = tostring(_0x1F9A8):reverse()
+local _0x8B5E4 = tonumber(_0x6C3D7) or 0
+
+-- Virtual Machine Executor
+local _0xVM_EXEC = function()
+    local _0xSTATE = 0
+    local _0xREGS = {}
+    local _0xSTACK = {}
+    
+    -- Control Flow Flattening State Machine
+    while true do
+        if _0xSTATE == 0 then
+            -- Initialize registers
+            _0xREGS[1] = game
+            _0xREGS[2] = _0xREGS[1][_0xA7B3C[2]]
+            _0xREGS[3] = _0xREGS[2][_0xA7B3C[3]]
+            _0xSTATE = 1
+        elseif _0xSTATE == 1 then
+            -- Junk operation
+            local _0xDUMMY1 = _0x8B5E4 * 17 + 42
+            _0xREGS[4] = _0xREGS[3]:WaitForChild(_0xA7B3C[4])
+            _0xSTATE = 2
+        elseif _0xSTATE == 2 then
+            -- Create ScreenGui
+            _0xREGS[5] = Instance.new(_0xA7B3C[8])
+            _0xSTATE = 3
+        elseif _0xSTATE == 3 then
+            -- Junk code insertion
+            for _0xI = 1, 3 do
+                local _0xTMP = math.sin(_0xI) * math.cos(_0xI)
+            end
+            _0xREGS[5][_0xA7B3C[9]] = _0xA7B3C[10]
+            _0xSTATE = 4
+        elseif _0xSTATE == 4 then
+            _0xREGS[5][_0xA7B3C[11]] = _0xREGS[4]
+            _0xSTATE = 5
+        elseif _0xSTATE == 5 then
+            -- Create TextLabel
+            _0xREGS[6] = Instance.new(_0xA7B3C[12])
+            _0xSTATE = 6
+        elseif _0xSTATE == 6 then
+            -- Hybrid literal obfuscation
+            local _0xSIZE_A = 0.3
+            local _0xSIZE_B = 0.1
+            local _0xOBF1 = _0xSIZE_A * 1.0
+            local _0xOBF2 = _0xSIZE_B * 1.0
+            _0xREGS[6][_0xA7B3C[13]] = UDim2.fromScale(_0xOBF1, _0xOBF2)
+            _0xSTATE = 7
+        elseif _0xSTATE == 7 then
+            -- Dead code
+            local _0xDEAD = function() return nil end
+            _0xDEAD()
+            
+            local _0xPOS_X = 0.35
+            local _0xPOS_Y = 0.45
+            _0xREGS[6][_0xA7B3C[15]] = UDim2.fromScale(_0xPOS_X, _0xPOS_Y)
+            _0xSTATE = 8
+        elseif _0xSTATE == 8 then
+            -- More junk operations
+            local _0xJNK = {}
+            for _0xJ = 1, 5 do
+                _0xJNK[_0xJ] = _0xJ * _0xJ
+            end
+            
+            _0xREGS[6][_0xA7B3C[16]] = 1
+            _0xSTATE = 9
+        elseif _0xSTATE == 9 then
+            _0xREGS[6][_0xA7B3C[17]] = _0xA7B3C[18]
+            _0xSTATE = 10
+        elseif _0xSTATE == 10 then
+            _0xREGS[6][_0xA7B3C[19]] = true
+            _0xSTATE = 11
+        elseif _0xSTATE == 11 then
+            -- Obfuscated color values
+            local _0xR = 1.0
+            local _0xG = 1.0
+            local _0xB = 1.0
+            local _0xCOL_OBFS = {_0xR, _0xG, _0xB}
+            _0xREGS[6][_0xA7B3C[20]] = Color3.new(_0xCOL_OBFS[1], _0xCOL_OBFS[2], _0xCOL_OBFS[3])
+            _0xSTATE = 12
+        elseif _0xSTATE == 12 then
+            -- Redundant computation
+            local _0xCHK = (_0x1F9A8 > 500) and true or false
+            if _0xCHK then
+                _0xREGS[6][_0xA7B3C[21]] = Enum.Font[_0xA7B3C[23]]
+            end
+            _0xSTATE = 13
+        elseif _0xSTATE == 13 then
+            _0xREGS[6][_0xA7B3C[11]] = _0xREGS[5]
+            _0xSTATE = 14
+        elseif _0xSTATE == 14 then
+            -- Final junk layer
+            local _0xFINAL_JNK = string.rep("x", 10)
+            _0xFINAL_JNK = _0xFINAL_JNK:reverse()
+            break
+        end
+    end
+end
+
+-- Anti-tamper wrapper
+local _0xWRAP = function()
+    local _0xSUCC, _0xERR = pcall(_0xVM_EXEC)
+    if not _0xSUCC then
+        -- Silent fail
+        return
+    end
+end
+
+-- Execute with additional obfuscation layer
+local _0xLAUNCH = coroutine.create(_0xWRAP)
+coroutine.resume(_0xLAUNCH)
+
+-- Additional junk code to confuse analysis
+for _0xIDX = 1, 100 do
+    local _0xNOISE = math.random() * math.pi
+    local _0xWAVE = math.sin(_0xNOISE) + math.cos(_0xNOISE)
+end
