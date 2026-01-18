@@ -3,7 +3,6 @@
 
 local Players = game:GetService("Players")
 local MarketplaceService = game:GetService("MarketplaceService")
-local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
 local char = player.Character or player.CharacterAdded:Wait()
 
@@ -273,37 +272,6 @@ local colorPresets = {
 	{name = "Deep Brown", color = Color3.fromRGB(140, 85, 50)},
 	{name = "Darker", color = Color3.fromRGB(116, 67, 37)},
 	{name = "Espresso", color = Color3.fromRGB(100, 55, 30)},
-	{name = "White", color = Color3.fromRGB(255, 255, 255)},
-	{name = "Light Gray", color = Color3.fromRGB(200, 200, 200)},
-	{name = "Gray", color = Color3.fromRGB(128, 128, 128)},
-	{name = "Dark Gray", color = Color3.fromRGB(64, 64, 64)},
-	{name = "Black", color = Color3.fromRGB(0, 0, 0)},
-	{name = "Red", color = Color3.fromRGB(255, 0, 0)},
-	{name = "Crimson", color = Color3.fromRGB(220, 20, 60)},
-	{name = "Orange", color = Color3.fromRGB(255, 165, 0)},
-	{name = "Yellow", color = Color3.fromRGB(255, 255, 0)},
-	{name = "Gold", color = Color3.fromRGB(255, 215, 0)},
-	{name = "Lime", color = Color3.fromRGB(0, 255, 0)},
-	{name = "Green", color = Color3.fromRGB(0, 128, 0)},
-	{name = "Emerald", color = Color3.fromRGB(0, 201, 87)},
-	{name = "Cyan", color = Color3.fromRGB(0, 255, 255)},
-	{name = "Blue", color = Color3.fromRGB(0, 0, 255)},
-	{name = "Navy", color = Color3.fromRGB(0, 0, 128)},
-	{name = "Purple", color = Color3.fromRGB(128, 0, 128)},
-	{name = "Magenta", color = Color3.fromRGB(255, 0, 255)},
-	{name = "Pink", color = Color3.fromRGB(255, 192, 203)},
-	{name = "Pastel Pink", color = Color3.fromRGB(255, 209, 220)},
-	{name = "Pastel Blue", color = Color3.fromRGB(174, 198, 207)},
-	{name = "Pastel Green", color = Color3.fromRGB(179, 226, 205)},
-	{name = "Pastel Yellow", color = Color3.fromRGB(253, 253, 150)},
-	{name = "Pastel Purple", color = Color3.fromRGB(203, 195, 227)},
-	{name = "Lavender", color = Color3.fromRGB(230, 230, 250)},
-	{name = "Neon Red", color = Color3.fromRGB(255, 16, 240)},
-	{name = "Neon Orange", color = Color3.fromRGB(255, 95, 31)},
-	{name = "Neon Yellow", color = Color3.fromRGB(224, 231, 34)},
-	{name = "Neon Green", color = Color3.fromRGB(57, 255, 20)},
-	{name = "Neon Blue", color = Color3.fromRGB(77, 77, 255)},
-	{name = "Neon Purple", color = Color3.fromRGB(191, 0, 255)},
 }
 
 for i, preset in ipairs(colorPresets) do
@@ -510,35 +478,56 @@ local function addAccessory(id)
 			weldParts(parent, h, ap and CFrame.new(0, parent.Size.Y/2, 0) or CFrame.new(), ap and ap.CFrame or CFrame.new())
 		end
 		acc.Parent = char
-		equippedItems[id] = {item = acc, type = "Accessory"}
+		acc:SetAttribute("OriginalAssetID", id)
+		equippedItems[tostring(id)] = {item = acc, type = "Accessory"}
 	end)
 end
 
 local function equipClothing(id, cType)
 	return pcall(function()
-		local m = game:GetObjects("rbxassetid://" .. id)[1]
-		local c = m:FindFirstChildOfClass(cType) or (m:IsA(cType) and m)
 		for _, v in pairs(char:GetChildren()) do
-			if v.ClassName == c.ClassName then v:Destroy() end
+			if v.ClassName == cType then 
+				local oldId = v:GetAttribute("OriginalAssetID")
+				if oldId then
+					equippedItems[tostring(oldId)] = nil
+				end
+				v:Destroy() 
+			end
 		end
-		c:Clone().Parent = char
-		m:Destroy()
-		equippedItems[id] = {item = char:FindFirstChildOfClass(cType), type = cType}
+		
+		local clothing = Instance.new(cType)
+		clothing.Parent = char
+		
+		if cType == "Shirt" then
+			clothing.ShirtTemplate = "rbxassetid://" .. id
+		elseif cType == "Pants" then
+			clothing.PantsTemplate = "rbxassetid://" .. id
+		end
+		
+		clothing:SetAttribute("OriginalAssetID", id)
+		equippedItems[tostring(id)] = {item = clothing, type = cType}
 	end)
 end
 
 local function equipFace(id)
 	return pcall(function()
-		local m = game:GetObjects("rbxassetid://" .. id)[1]
-		local d = m:FindFirstChildOfClass("Decal") or (m:IsA("Decal") and m)
 		local h = char:FindFirstChild("Head")
+		if not h then return end
+		
 		for _, v in pairs(h:GetChildren()) do
-			if v:IsA("Decal") and v.Name == "face" then v:Destroy() end
+			if v:IsA("Decal") and v.Name == "face" then 
+				v:Destroy() 
+			end
 		end
-		local f = d:Clone()
-		f.Name, f.Face, f.Parent = "face", Enum.NormalId.Front, h
-		m:Destroy()
-		equippedItems[id] = {item = f, type = "Face"}
+		
+		local face = Instance.new("Decal")
+		face.Name = "face"
+		face.Texture = "rbxassetid://" .. id
+		face.Face = Enum.NormalId.Front
+		face.Parent = h
+		face:SetAttribute("OriginalAssetID", id)
+		
+		equippedItems[tostring(id)] = {item = face, type = "Face"}
 	end)
 end
 
@@ -558,7 +547,7 @@ local function updateEquipped()
 		fc.CornerRadius = UDim.new(0, 8)
 		fc.Parent = f
 		
-local t = Instance.new("ImageLabel")
+		local t = Instance.new("ImageLabel")
 		t.Size = UDim2.new(0, 65, 0, 65)
 		t.Position = UDim2.new(0, 5, 0, 5)
 		t.BackgroundColor3 = Color3.fromRGB(32, 34, 37)
@@ -583,7 +572,7 @@ local t = Instance.new("ImageLabel")
 		n.Parent = f
 		
 		pcall(function()
-			local info = MarketplaceService:GetProductInfo(id, Enum.InfoType.Asset)
+			local info = MarketplaceService:GetProductInfo(tonumber(id), Enum.InfoType.Asset)
 			if info then n.Text = info.Name end
 		end)
 		
@@ -630,16 +619,14 @@ end
 
 local function generateAvatarCode()
 	local codeLines = {}
-	table.insert(codeLines, "-- Avatar Recreation Script")
-	table.insert(codeLines, "-- Paste this into your script to recreate this avatar")
-	table.insert(codeLines, "")
+	table.insert(codeLines, "-- Avatar Code")
 	table.insert(codeLines, "local Players = game:GetService('Players')")
 	table.insert(codeLines, "local player = Players.LocalPlayer")
 	table.insert(codeLines, "local char = player.Character or player.CharacterAdded:Wait()")
 	table.insert(codeLines, "")
-	table.insert(codeLines, "-- Apply Body Colors")
 	
-	-- Save body part colors
+	-- Save body colors
+	table.insert(codeLines, "-- Body Colors")
 	for _, part in pairs(char:GetChildren()) do
 		if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
 			local r = math.floor(part.Color.R * 255)
@@ -663,12 +650,12 @@ local function generateAvatarCode()
 	table.insert(codeLines, "    end")
 	table.insert(codeLines, "end")
 	table.insert(codeLines, "")
-	table.insert(codeLines, "-- Equip Items")
-	table.insert(codeLines, "local function equipItem(assetId, itemType)")
+	table.insert(codeLines, "-- Equip Function")
+	table.insert(codeLines, "local function equip(id, type)")
 	table.insert(codeLines, "    wait(0.2)")
 	table.insert(codeLines, "    pcall(function()")
-	table.insert(codeLines, "        if itemType == 'Accessory' then")
-	table.insert(codeLines, "            local acc = game:GetObjects('rbxassetid://'..assetId)[1]")
+	table.insert(codeLines, "        if type == 'Accessory' then")
+	table.insert(codeLines, "            local acc = game:GetObjects('rbxassetid://'..id)[1]")
 	table.insert(codeLines, "            acc.Parent = workspace")
 	table.insert(codeLines, "            local h = acc:FindFirstChild('Handle')")
 	table.insert(codeLines, "            if h then")
@@ -686,20 +673,19 @@ local function generateAvatarCode()
 	table.insert(codeLines, "                end")
 	table.insert(codeLines, "                acc.Parent = char")
 	table.insert(codeLines, "            end")
-	table.insert(codeLines, "        elseif itemType == 'Shirt' then")
-	table.insert(codeLines, "        elseif itemType == 'Shirt' then")
+	table.insert(codeLines, "        elseif type == 'Shirt' then")
 	table.insert(codeLines, "            for _, v in pairs(char:GetChildren()) do")
 	table.insert(codeLines, "                if v:IsA('Shirt') then v:Destroy() end")
 	table.insert(codeLines, "            end")
 	table.insert(codeLines, "            local shirt = Instance.new('Shirt', char)")
-	table.insert(codeLines, "            shirt.ShirtTemplate = 'rbxassetid://'..assetId")
-	table.insert(codeLines, "        elseif itemType == 'Pants' then")
+	table.insert(codeLines, "            shirt.ShirtTemplate = 'rbxassetid://'..id")
+	table.insert(codeLines, "        elseif type == 'Pants' then")
 	table.insert(codeLines, "            for _, v in pairs(char:GetChildren()) do")
 	table.insert(codeLines, "                if v:IsA('Pants') then v:Destroy() end")
 	table.insert(codeLines, "            end")
 	table.insert(codeLines, "            local pants = Instance.new('Pants', char)")
-	table.insert(codeLines, "            pants.PantsTemplate = 'rbxassetid://'..assetId")
-	table.insert(codeLines, "        elseif itemType == 'Face' then")
+	table.insert(codeLines, "            pants.PantsTemplate = 'rbxassetid://'..id")
+	table.insert(codeLines, "        elseif type == 'Face' then")
 	table.insert(codeLines, "            local head = char:FindFirstChild('Head')")
 	table.insert(codeLines, "            if head then")
 	table.insert(codeLines, "                for _, v in pairs(head:GetChildren()) do")
@@ -707,89 +693,38 @@ local function generateAvatarCode()
 	table.insert(codeLines, "                end")
 	table.insert(codeLines, "                local face = Instance.new('Decal', head)")
 	table.insert(codeLines, "                face.Name = 'face'")
-	table.insert(codeLines, "                face.Texture = 'rbxassetid://'..assetId")
+	table.insert(codeLines, "                face.Texture = 'rbxassetid://'..id")
 	table.insert(codeLines, "            end")
 	table.insert(codeLines, "        end")
 	table.insert(codeLines, "    end)")
 	table.insert(codeLines, "end")
 	table.insert(codeLines, "")
+	table.insert(codeLines, "-- Load Items")
 	
-	-- Scan ALL items on character
+	-- Collect all equipped items with their ORIGINAL asset IDs
 	local itemCount = 0
 	
-	-- Get all accessories
-	for _, item in pairs(char:GetChildren()) do
-		if item:IsA("Accessory") then
-			local handle = item:FindFirstChild("Handle")
-			if handle then
-				-- Try multiple methods to get the asset ID
-				local assetId = nil
-				
-				-- Method 1: Check for mesh texture
-				for _, child in pairs(handle:GetDescendants()) do
-					if child:IsA("SpecialMesh") and child.MeshId ~= "" then
-						assetId = child.MeshId:match("%d+")
-						break
-					end
-				end
-				
-				-- Method 2: Try AccessoryBlob
-				if not assetId then
-					local blob = item:FindFirstChild("AccessoryBlob")
-					if blob then
-						assetId = tostring(blob.Value)
-					end
-				end
-				
-				if assetId then
-					itemCount = itemCount + 1
-					table.insert(codeLines, string.format("equipItem(%s, 'Accessory') -- %s", assetId, item.Name))
-				end
-			end
-		elseif item:IsA("Shirt") then
-			local shirtId = item.ShirtTemplate:match("%d+")
-			if shirtId then
-				itemCount = itemCount + 1
-				table.insert(codeLines, string.format("equipItem(%s, 'Shirt')", shirtId))
-			end
-		elseif item:IsA("Pants") then
-			local pantsId = item.PantsTemplate:match("%d+")
-			if pantsId then
-				itemCount = itemCount + 1
-				table.insert(codeLines, string.format("equipItem(%s, 'Pants')", pantsId))
-			end
-		elseif item:IsA("ShirtGraphic") then
-			local graphicId = item.Graphic:match("%d+")
-			if graphicId then
-				itemCount = itemCount + 1
-				table.insert(codeLines, string.format("equipItem(%s, 'ShirtGraphic')", graphicId))
-			end
-		end
-	end
-	
-	-- Get face
-	local head = char:FindFirstChild("Head")
-	if head then
-		local face = head:FindFirstChild("face")
-		if face and face:IsA("Decal") then
-			local faceId = face.Texture:match("%d+")
-			if faceId then
-				itemCount = itemCount + 1
-				table.insert(codeLines, string.format("equipItem(%s, 'Face')", faceId))
-			end
-		end
+	-- Get items from equippedItems table (this has the correct IDs)
+	for id, data in pairs(equippedItems) do
+		itemCount = itemCount + 1
+		table.insert(codeLines, string.format("equip(%s, '%s')", id, data.type))
 	end
 	
 	table.insert(codeLines, "")
-	table.insert(codeLines, string.format("-- Total items: %d", itemCount))
+	table.insert(codeLines, string.format("-- Total: %d items", itemCount))
 	
 	return table.concat(codeLines, "\n")
 end
 
 local function loadAvatarFromCode(code)
-	-- Execute the generated Lua code
+	-- Simply execute the code
 	local success, err = pcall(function()
-		loadstring(code)()
+		local func = loadstring(code)
+		if func then
+			func()
+		else
+			error("Failed to compile code")
+		end
 	end)
 	
 	if success then
@@ -803,7 +738,7 @@ saveButton.MouseButton1Click:Connect(function()
 	statusLabel.Text = "⏳ Generating code..."
 	statusLabel.TextColor3 = Color3.fromRGB(255, 255, 100)
 	
-	wait(0.5)
+	wait(0.3)
 	
 	local code = generateAvatarCode()
 	if code then
@@ -826,12 +761,13 @@ loadButton.MouseButton1Click:Connect(function()
 	statusLabel.Text = "⏳ Loading avatar..."
 	statusLabel.TextColor3 = Color3.fromRGB(255, 255, 100)
 	
-	wait(0.5)
+	wait(0.3)
 	
 	local success, err = loadAvatarFromCode(codeBox.Text)
 	if success then
 		statusLabel.Text = "✓ Avatar loaded successfully!"
 		statusLabel.TextColor3 = Color3.fromRGB(67, 181, 129)
+		wait(1)
 		updateEquipped()
 	else
 		statusLabel.Text = "✗ " .. (err or "Failed to load")
@@ -854,8 +790,6 @@ local function autoEquip(id)
 			s, r = equipClothing(id, "Shirt")
 		elseif t == 12 then 
 			s, r = equipClothing(id, "Pants")
-		elseif t == 2 then 
-			s, r = equipClothing(id, "ShirtGraphic")
 		elseif t == 18 then 
 			s, r = equipFace(id)
 		end
