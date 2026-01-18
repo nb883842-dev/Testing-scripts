@@ -1,0 +1,918 @@
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local gui = Instance.new("ScreenGui")
+gui.Name = "ModernExecutorUI"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+
+-- ================= SETTINGS & SAVE SYSTEM =================
+local Settings = {
+	FPS = 60,
+	Ping = 0,
+	Graphics = 5,
+	AntiScam = true,
+	SavedScripts = {}
+}
+
+local function SaveSettings()
+	pcall(function()
+		writefile("ExecutorSettings.json", game:GetService("HttpService"):JSONEncode(Settings))
+	end)
+end
+
+local function LoadSettings()
+	pcall(function()
+		if isfile("ExecutorSettings.json") then
+			local data = readfile("ExecutorSettings.json")
+			local decoded = game:GetService("HttpService"):JSONDecode(data)
+			for k,v in pairs(decoded) do
+				Settings[k] = v
+			end
+		end
+	end)
+end
+
+LoadSettings()
+
+-- ================= CONSOLE SYSTEM =================
+local ConsoleOutput = {}
+local function AddConsoleLog(text, color)
+	table.insert(ConsoleOutput, {Text = text, Color = color or Color3.new(1,1,1), Time = os.date("%H:%M:%S")})
+	if #ConsoleOutput > 100 then
+		table.remove(ConsoleOutput, 1)
+	end
+end
+
+-- ================= MAIN WINDOW =================
+local mainWindow = Instance.new("Frame")
+mainWindow.Parent = gui
+mainWindow.Size = UDim2.fromOffset(450,520)
+mainWindow.Position = UDim2.new(1,-10,0.5,0)
+mainWindow.AnchorPoint = Vector2.new(1,0.5)
+mainWindow.BackgroundColor3 = Color3.fromRGB(15,15,15)
+mainWindow.BorderSizePixel = 0
+mainWindow.Visible = false
+mainWindow.ZIndex = 5
+
+local mainCorner = Instance.new("UICorner", mainWindow)
+mainCorner.CornerRadius = UDim.new(0,12)
+
+local mainStroke = Instance.new("UIStroke", mainWindow)
+mainStroke.Color = Color3.fromRGB(40,40,40)
+mainStroke.Thickness = 1
+
+-- ================= SIDEBAR (RIGHT SIDE) =================
+local sidebar = Instance.new("Frame", mainWindow)
+sidebar.Size = UDim2.new(0,60,1,0)
+sidebar.Position = UDim2.new(1,-60,0,0)
+sidebar.BackgroundColor3 = Color3.fromRGB(10,10,10)
+sidebar.BorderSizePixel = 0
+sidebar.ZIndex = 6
+
+local sidebarCorner = Instance.new("UICorner", sidebar)
+sidebarCorner.CornerRadius = UDim.new(0,12)
+
+local sidebarCover = Instance.new("Frame", sidebar)
+sidebarCover.Size = UDim2.new(0,20,1,0)
+sidebarCover.Position = UDim2.new(0,0,0,0)
+sidebarCover.BackgroundColor3 = Color3.fromRGB(10,10,10)
+sidebarCover.BorderSizePixel = 0
+sidebarCover.ZIndex = 6
+
+local tabLayout = Instance.new("UIListLayout", sidebar)
+tabLayout.Padding = UDim.new(0,8)
+tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+tabLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+
+local topPadding = Instance.new("Frame", sidebar)
+topPadding.Size = UDim2.new(1,0,0,15)
+topPadding.BackgroundTransparency = 1
+topPadding.ZIndex = 6
+topPadding.LayoutOrder = 0
+
+-- ================= CONTENT AREA =================
+local contentArea = Instance.new("Frame", mainWindow)
+contentArea.Size = UDim2.new(1,-70,1,-10)
+contentArea.Position = UDim2.fromOffset(5,5)
+contentArea.BackgroundTransparency = 1
+contentArea.BorderSizePixel = 0
+contentArea.ZIndex = 6
+
+-- ================= TAB SYSTEM =================
+local activeTab = "Execution"
+local tabButtons = {}
+local tabContents = {}
+
+local function CreateTabButton(name, icon, order)
+	local btn = Instance.new("TextButton", sidebar)
+	btn.Size = UDim2.fromOffset(50,50)
+	btn.Text = ""
+	btn.BackgroundColor3 = Color3.fromRGB(20,20,20)
+	btn.BorderSizePixel = 0
+	btn.AutoButtonColor = false
+	btn.ZIndex = 7
+	btn.LayoutOrder = order
+	
+	local corner = Instance.new("UICorner", btn)
+	corner.CornerRadius = UDim.new(0,10)
+	
+	local iconLabel = Instance.new("TextLabel", btn)
+	iconLabel.Size = UDim2.new(1,0,1,0)
+	iconLabel.Text = icon
+	iconLabel.TextSize = 22
+	iconLabel.BackgroundTransparency = 1
+	iconLabel.TextColor3 = Color3.fromRGB(120,120,120)
+	iconLabel.ZIndex = 8
+	
+	tabButtons[name] = {Button = btn, Icon = iconLabel}
+	
+	btn.MouseButton1Click:Connect(function()
+		activeTab = name
+		for n, data in pairs(tabButtons) do
+			if n == name then
+				data.Button.BackgroundColor3 = Color3.fromRGB(35,35,35)
+				data.Icon.TextColor3 = Color3.fromRGB(255,255,255)
+			else
+				data.Button.BackgroundColor3 = Color3.fromRGB(20,20,20)
+				data.Icon.TextColor3 = Color3.fromRGB(120,120,120)
+			end
+		end
+		
+		for n, content in pairs(tabContents) do
+			content.Visible = (n == name)
+		end
+	end)
+end
+
+CreateTabButton("Execution", "📊", 1)
+CreateTabButton("Editor", "📝", 2)
+CreateTabButton("Scripts", "💾", 3)
+CreateTabButton("Console", "💻", 4)
+CreateTabButton("Settings", "⚙️", 5)
+
+-- ================= EXECUTION TAB =================
+local executionContent = Instance.new("Frame", contentArea)
+executionContent.Name = "ExecutionContent"
+executionContent.Size = UDim2.new(1,0,1,0)
+executionContent.BackgroundTransparency = 1
+executionContent.Visible = true
+executionContent.ZIndex = 6
+tabContents["Execution"] = executionContent
+
+local execTitle = Instance.new("TextLabel", executionContent)
+execTitle.Size = UDim2.new(1,0,0,30)
+execTitle.Text = "System Stats"
+execTitle.TextSize = 16
+execTitle.Font = Enum.Font.GothamBold
+execTitle.TextColor3 = Color3.fromRGB(255,255,255)
+execTitle.TextXAlignment = Enum.TextXAlignment.Left
+execTitle.BackgroundTransparency = 1
+execTitle.ZIndex = 7
+
+local statsContainer = Instance.new("Frame", executionContent)
+statsContainer.Size = UDim2.new(1,0,0,200)
+statsContainer.Position = UDim2.fromOffset(0,40)
+statsContainer.BackgroundTransparency = 1
+statsContainer.ZIndex = 6
+
+local function CreateStatBox(name, icon, yPos)
+	local box = Instance.new("Frame", statsContainer)
+	box.Size = UDim2.new(1,0,0,55)
+	box.Position = UDim2.fromOffset(0,yPos)
+	box.BackgroundColor3 = Color3.fromRGB(20,20,20)
+	box.BorderSizePixel = 0
+	box.ZIndex = 7
+	
+	local corner = Instance.new("UICorner", box)
+	corner.CornerRadius = UDim.new(0,10)
+	
+	local iconLabel = Instance.new("TextLabel", box)
+	iconLabel.Size = UDim2.fromOffset(40,40)
+	iconLabel.Position = UDim2.fromOffset(10,7)
+	iconLabel.Text = icon
+	iconLabel.TextSize = 24
+	iconLabel.BackgroundTransparency = 1
+	iconLabel.ZIndex = 8
+	
+	local nameLabel = Instance.new("TextLabel", box)
+	nameLabel.Size = UDim2.new(1,-60,0,18)
+	nameLabel.Position = UDim2.fromOffset(55,8)
+	nameLabel.Text = name
+	nameLabel.TextSize = 11
+	nameLabel.Font = Enum.Font.Gotham
+	nameLabel.TextColor3 = Color3.fromRGB(150,150,150)
+	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.ZIndex = 8
+	
+	local valueLabel = Instance.new("TextLabel", box)
+	valueLabel.Size = UDim2.new(1,-60,0,24)
+	valueLabel.Position = UDim2.fromOffset(55,27)
+	valueLabel.Text = "0"
+	valueLabel.TextSize = 18
+	valueLabel.Font = Enum.Font.GothamBold
+	valueLabel.TextColor3 = Color3.fromRGB(255,255,255)
+	valueLabel.TextXAlignment = Enum.TextXAlignment.Left
+	valueLabel.BackgroundTransparency = 1
+	valueLabel.ZIndex = 8
+	
+	return valueLabel
+end
+
+local fpsValue = CreateStatBox("Frames Per Second", "🎮", 0)
+local pingValue = CreateStatBox("Network Ping", "📡", 65)
+local graphicsValue = CreateStatBox("Graphics Quality", "✨", 130)
+
+local playersTitle = Instance.new("TextLabel", executionContent)
+playersTitle.Size = UDim2.new(1,0,0,25)
+playersTitle.Position = UDim2.fromOffset(0,250)
+playersTitle.Text = "Players in Game"
+playersTitle.TextSize = 14
+playersTitle.Font = Enum.Font.GothamBold
+playersTitle.TextColor3 = Color3.fromRGB(255,255,255)
+playersTitle.TextXAlignment = Enum.TextXAlignment.Left
+playersTitle.BackgroundTransparency = 1
+playersTitle.ZIndex = 7
+
+local playersScroll = Instance.new("ScrollingFrame", executionContent)
+playersScroll.Size = UDim2.new(1,0,1,-285)
+playersScroll.Position = UDim2.fromOffset(0,280)
+playersScroll.BackgroundColor3 = Color3.fromRGB(20,20,20)
+playersScroll.BorderSizePixel = 0
+playersScroll.ZIndex = 7
+playersScroll.ScrollBarThickness = 4
+playersScroll.ScrollBarImageColor3 = Color3.fromRGB(60,60,60)
+
+local playersCorner = Instance.new("UICorner", playersScroll)
+playersCorner.CornerRadius = UDim.new(0,10)
+
+local playersLayout = Instance.new("UIListLayout", playersScroll)
+playersLayout.Padding = UDim.new(0,4)
+
+local playersPadding = Instance.new("UIPadding", playersScroll)
+playersPadding.PaddingTop = UDim.new(0,5)
+playersPadding.PaddingLeft = UDim.new(0,5)
+playersPadding.PaddingRight = UDim.new(0,5)
+
+-- ================= EDITOR TAB =================
+local editorContent = Instance.new("Frame", contentArea)
+editorContent.Name = "EditorContent"
+editorContent.Size = UDim2.new(1,0,1,0)
+editorContent.BackgroundTransparency = 1
+editorContent.Visible = false
+editorContent.ZIndex = 6
+tabContents["Editor"] = editorContent
+
+local textBox = Instance.new("TextBox", editorContent)
+textBox.Size = UDim2.new(1,0,1,-65)
+textBox.Position = UDim2.fromOffset(0,0)
+textBox.Text = ""
+textBox.PlaceholderText = "-- Script here..."
+textBox.ClearTextOnFocus = false
+textBox.TextWrapped = true
+textBox.TextYAlignment = Enum.TextYAlignment.Top
+textBox.TextXAlignment = Enum.TextXAlignment.Left
+textBox.TextSize = 13
+textBox.Font = Enum.Font.Code
+textBox.TextColor3 = Color3.fromRGB(220,220,220)
+textBox.BackgroundColor3 = Color3.fromRGB(20,20,20)
+textBox.BorderSizePixel = 0
+textBox.ZIndex = 7
+textBox.MultiLine = true
+
+local textBoxCorner = Instance.new("UICorner", textBox)
+textBoxCorner.CornerRadius = UDim.new(0,10)
+
+local textBoxPadding = Instance.new("UIPadding", textBox)
+textBoxPadding.PaddingTop = UDim.new(0,8)
+textBoxPadding.PaddingLeft = UDim.new(0,10)
+textBoxPadding.PaddingRight = UDim.new(0,10)
+
+local buttonContainer = Instance.new("Frame", editorContent)
+buttonContainer.Size = UDim2.new(1,0,0,60)
+buttonContainer.Position = UDim2.new(0,0,1,-60)
+buttonContainer.BackgroundTransparency = 1
+buttonContainer.ZIndex = 6
+
+local btnLayout = Instance.new("UIGridLayout", buttonContainer)
+btnLayout.CellSize = UDim2.new(0.48,0,0,27)
+btnLayout.CellPadding = UDim2.fromOffset(6,6)
+
+local function CreateActionButton(text, color, callback)
+	local btn = Instance.new("TextButton", buttonContainer)
+	btn.Text = text
+	btn.TextSize = 12
+	btn.Font = Enum.Font.GothamBold
+	btn.TextColor3 = Color3.new(1,1,1)
+	btn.BackgroundColor3 = color
+	btn.BorderSizePixel = 0
+	btn.ZIndex = 7
+	
+	local corner = Instance.new("UICorner", btn)
+	corner.CornerRadius = UDim.new(0,8)
+	
+	btn.MouseButton1Click:Connect(callback)
+	
+	return btn
+end
+
+CreateActionButton("▶ Execute", Color3.fromRGB(40,140,40), function()
+	local source = textBox.Text
+	if source == "" then 
+		AddConsoleLog("Error: Empty script", Color3.fromRGB(255,150,0))
+		return 
+	end
+	
+	if Settings.AntiScam and (source:lower():find("robux") or source:lower():find("premium")) then
+		AddConsoleLog("⚠️ Anti-Scam: Script blocked (mentions Robux)", Color3.fromRGB(255,100,100))
+		return
+	end
+	
+	local fn, err = loadstring(source)
+	if not fn then
+		AddConsoleLog("Compile Error: "..tostring(err), Color3.fromRGB(255,50,50))
+		return
+	end
+	
+	local success, runtimeErr = pcall(fn)
+	if success then
+		AddConsoleLog("✓ Script executed successfully", Color3.fromRGB(50,255,150))
+	else
+		AddConsoleLog("Runtime Error: "..tostring(runtimeErr), Color3.fromRGB(255,50,50))
+	end
+end)
+
+CreateActionButton("🗑 Clear", Color3.fromRGB(140,40,40), function()
+	textBox.Text = ""
+	AddConsoleLog("Editor cleared", Color3.fromRGB(150,150,255))
+end)
+
+CreateActionButton("💾 Save", Color3.fromRGB(40,100,180), function()
+	if textBox.Text == "" then
+		AddConsoleLog("Cannot save empty script", Color3.fromRGB(255,150,0))
+		return
+	end
+	table.insert(Settings.SavedScripts, {Name = "Script_"..#Settings.SavedScripts+1, Code = textBox.Text})
+	SaveSettings()
+	AddConsoleLog("✓ Script saved", Color3.fromRGB(100,200,255))
+end)
+
+CreateActionButton("📋 Paste", Color3.fromRGB(80,80,140), function()
+	pcall(function()
+		textBox.Text = getclipboard() or ""
+		AddConsoleLog("Clipboard pasted", Color3.fromRGB(150,200,255))
+	end)
+end)
+
+-- ================= SCRIPTS TAB =================
+local scriptsContent = Instance.new("Frame", contentArea)
+scriptsContent.Name = "ScriptsContent"
+scriptsContent.Size = UDim2.new(1,0,1,0)
+scriptsContent.BackgroundTransparency = 1
+scriptsContent.Visible = false
+scriptsContent.ZIndex = 6
+tabContents["Scripts"] = scriptsContent
+
+local scriptsTitle = Instance.new("TextLabel", scriptsContent)
+scriptsTitle.Size = UDim2.new(1,0,0,30)
+scriptsTitle.Text = "Saved Scripts"
+scriptsTitle.TextSize = 16
+scriptsTitle.Font = Enum.Font.GothamBold
+scriptsTitle.TextColor3 = Color3.fromRGB(255,255,255)
+scriptsTitle.TextXAlignment = Enum.TextXAlignment.Left
+scriptsTitle.BackgroundTransparency = 1
+scriptsTitle.ZIndex = 7
+
+local addScriptContainer = Instance.new("Frame", scriptsContent)
+addScriptContainer.Size = UDim2.new(1,0,0,80)
+addScriptContainer.Position = UDim2.fromOffset(0,35)
+addScriptContainer.BackgroundColor3 = Color3.fromRGB(20,20,20)
+addScriptContainer.BorderSizePixel = 0
+addScriptContainer.ZIndex = 7
+
+local addScriptCorner = Instance.new("UICorner", addScriptContainer)
+addScriptCorner.CornerRadius = UDim.new(0,10)
+
+local nameInput = Instance.new("TextBox", addScriptContainer)
+nameInput.Size = UDim2.new(1,-20,0,28)
+nameInput.Position = UDim2.fromOffset(10,10)
+nameInput.PlaceholderText = "Script Name..."
+nameInput.Text = ""
+nameInput.TextSize = 12
+nameInput.Font = Enum.Font.Gotham
+nameInput.TextColor3 = Color3.fromRGB(220,220,220)
+nameInput.BackgroundColor3 = Color3.fromRGB(30,30,30)
+nameInput.BorderSizePixel = 0
+nameInput.ZIndex = 8
+nameInput.ClearTextOnFocus = false
+
+local nameInputCorner = Instance.new("UICorner", nameInput)
+nameInputCorner.CornerRadius = UDim.new(0,6)
+
+local addScriptBtn = Instance.new("TextButton", addScriptContainer)
+addScriptBtn.Size = UDim2.new(1,-20,0,32)
+addScriptBtn.Position = UDim2.fromOffset(10,43)
+addScriptBtn.Text = "➕ Add Current Script"
+addScriptBtn.TextSize = 12
+addScriptBtn.Font = Enum.Font.GothamBold
+addScriptBtn.TextColor3 = Color3.fromRGB(255,255,255)
+addScriptBtn.BackgroundColor3 = Color3.fromRGB(40,120,200)
+addScriptBtn.BorderSizePixel = 0
+addScriptBtn.ZIndex = 8
+
+local addScriptBtnCorner = Instance.new("UICorner", addScriptBtn)
+addScriptBtnCorner.CornerRadius = UDim.new(0,8)
+
+addScriptBtn.MouseButton1Click:Connect(function()
+	if nameInput.Text ~= "" and textBox.Text ~= "" then
+		table.insert(Settings.SavedScripts, {Name = nameInput.Text, Code = textBox.Text})
+		SaveSettings()
+		AddConsoleLog("✓ Script '"..nameInput.Text.."' saved", Color3.fromRGB(100,200,255))
+		nameInput.Text = ""
+	else
+		AddConsoleLog("Enter name and write script first", Color3.fromRGB(255,150,0))
+	end
+end)
+
+local searchBox = Instance.new("TextBox", scriptsContent)
+searchBox.Size = UDim2.new(1,0,0,32)
+searchBox.Position = UDim2.fromOffset(0,125)
+searchBox.PlaceholderText = "🔍 Search scripts..."
+searchBox.Text = ""
+searchBox.TextSize = 12
+searchBox.Font = Enum.Font.Gotham
+searchBox.TextColor3 = Color3.fromRGB(220,220,220)
+searchBox.BackgroundColor3 = Color3.fromRGB(20,20,20)
+searchBox.BorderSizePixel = 0
+searchBox.ZIndex = 7
+searchBox.ClearTextOnFocus = false
+
+local searchBoxCorner = Instance.new("UICorner", searchBox)
+searchBoxCorner.CornerRadius = UDim.new(0,10)
+
+local scriptsScroll = Instance.new("ScrollingFrame", scriptsContent)
+scriptsScroll.Size = UDim2.new(1,0,1,-167)
+scriptsScroll.Position = UDim2.fromOffset(0,162)
+scriptsScroll.BackgroundColor3 = Color3.fromRGB(20,20,20)
+scriptsScroll.BorderSizePixel = 0
+scriptsScroll.ZIndex = 7
+scriptsScroll.ScrollBarThickness = 4
+scriptsScroll.ScrollBarImageColor3 = Color3.fromRGB(60,60,60)
+
+local scriptsScrollCorner = Instance.new("UICorner", scriptsScroll)
+scriptsScrollCorner.CornerRadius = UDim.new(0,10)
+
+local scriptsLayout = Instance.new("UIListLayout", scriptsScroll)
+scriptsLayout.Padding = UDim.new(0,5)
+
+local scriptsPadding = Instance.new("UIPadding", scriptsScroll)
+scriptsPadding.PaddingTop = UDim.new(0,5)
+scriptsPadding.PaddingLeft = UDim.new(0,5)
+scriptsPadding.PaddingRight = UDim.new(0,5)
+
+local function RefreshScripts()
+	for _, child in pairs(scriptsScroll:GetChildren()) do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+	
+	local searchTerm = searchBox.Text:lower()
+	
+	for i, script in ipairs(Settings.SavedScripts) do
+		if searchTerm == "" or script.Name:lower():find(searchTerm) then
+			local scriptFrame = Instance.new("Frame", scriptsScroll)
+			scriptFrame.Size = UDim2.new(1,-10,0,50)
+			scriptFrame.BackgroundColor3 = Color3.fromRGB(25,25,25)
+			scriptFrame.BorderSizePixel = 0
+			scriptFrame.ZIndex = 8
+			
+			local scriptCorner = Instance.new("UICorner", scriptFrame)
+			scriptCorner.CornerRadius = UDim.new(0,8)
+			
+			local scriptName = Instance.new("TextLabel", scriptFrame)
+			scriptName.Size = UDim2.new(1,-120,1,0)
+			scriptName.Position = UDim2.fromOffset(10,0)
+			scriptName.Text = script.Name
+			scriptName.TextSize = 13
+			scriptName.Font = Enum.Font.GothamBold
+			scriptName.TextColor3 = Color3.fromRGB(220,220,220)
+			scriptName.TextXAlignment = Enum.TextXAlignment.Left
+			scriptName.BackgroundTransparency = 1
+			scriptName.ZIndex = 9
+			
+			local executeBtn = Instance.new("TextButton", scriptFrame)
+			executeBtn.Size = UDim2.fromOffset(32,32)
+			executeBtn.Position = UDim2.new(1,-105,0.5,-16)
+			executeBtn.Text = "▶"
+			executeBtn.TextSize = 14
+			executeBtn.Font = Enum.Font.GothamBold
+			executeBtn.TextColor3 = Color3.fromRGB(255,255,255)
+			executeBtn.BackgroundColor3 = Color3.fromRGB(40,140,40)
+			executeBtn.BorderSizePixel = 0
+			executeBtn.ZIndex = 9
+			
+			local executeCorner = Instance.new("UICorner", executeBtn)
+			executeCorner.CornerRadius = UDim.new(0,6)
+			
+			executeBtn.MouseButton1Click:Connect(function()
+				textBox.Text = script.Code
+				activeTab = "Editor"
+				tabButtons["Editor"].Button.BackgroundColor3 = Color3.fromRGB(35,35,35)
+				tabButtons["Editor"].Icon.TextColor3 = Color3.fromRGB(255,255,255)
+				for n, content in pairs(tabContents) do
+					content.Visible = (n == "Editor")
+				end
+				
+				local fn, err = loadstring(script.Code)
+				if fn then
+					local success = pcall(fn)
+					if success then
+						AddConsoleLog("✓ Executed: "..script.Name, Color3.fromRGB(50,255,150))
+					end
+				end
+			end)
+			
+			local loadBtn = Instance.new("TextButton", scriptFrame)
+			loadBtn.Size = UDim2.fromOffset(32,32)
+			loadBtn.Position = UDim2.new(1,-68,0.5,-16)
+			loadBtn.Text = "📝"
+			loadBtn.TextSize = 14
+			loadBtn.Font = Enum.Font.GothamBold
+			loadBtn.TextColor3 = Color3.fromRGB(255,255,255)
+			loadBtn.BackgroundColor3 = Color3.fromRGB(40,100,180)
+			loadBtn.BorderSizePixel = 0
+			loadBtn.ZIndex = 9
+			
+			local loadCorner = Instance.new("UICorner", loadBtn)
+			loadCorner.CornerRadius = UDim.new(0,6)
+			
+			loadBtn.MouseButton1Click:Connect(function()
+				textBox.Text = script.Code
+				activeTab = "Editor"
+				tabButtons["Editor"].Button.BackgroundColor3 = Color3.fromRGB(35,35,35)
+				tabButtons["Editor"].Icon.TextColor3 = Color3.fromRGB(255,255,255)
+				for n, content in pairs(tabContents) do
+					content.Visible = (n == "Editor")
+				end
+				AddConsoleLog("Loaded: "..script.Name, Color3.fromRGB(100,200,255))
+			end)
+			
+			local deleteBtn = Instance.new("TextButton", scriptFrame)
+			deleteBtn.Size = UDim2.fromOffset(32,32)
+			deleteBtn.Position = UDim2.new(1,-31,0.5,-16)
+			deleteBtn.Text = "🗑"
+			deleteBtn.TextSize = 14
+			deleteBtn.Font = Enum.Font.GothamBold
+			deleteBtn.TextColor3 = Color3.fromRGB(255,255,255)
+			deleteBtn.BackgroundColor3 = Color3.fromRGB(140,40,40)
+			deleteBtn.BorderSizePixel = 0
+			deleteBtn.ZIndex = 9
+			
+			local deleteCorner = Instance.new("UICorner", deleteBtn)
+			deleteCorner.CornerRadius = UDim.new(0,6)
+			
+			deleteBtn.MouseButton1Click:Connect(function()
+				table.remove(Settings.SavedScripts, i)
+				SaveSettings()
+				AddConsoleLog("Deleted: "..script.Name, Color3.fromRGB(255,100,100))
+				RefreshScripts()
+			end)
+		end
+	end
+	
+	scriptsScroll.CanvasSize = UDim2.new(0,0,0,scriptsLayout.AbsoluteContentSize.Y + 10)
+end
+
+searchBox:GetPropertyChangedSignal("Text"):Connect(RefreshScripts)
+
+-- ================= CONSOLE TAB =================
+local consoleContent = Instance.new("Frame", contentArea)
+consoleContent.Name = "ConsoleContent"
+consoleContent.Size = UDim2.new(1,0,1,0)
+consoleContent.BackgroundTransparency = 1
+consoleContent.Visible = false
+consoleContent.ZIndex = 6
+tabContents["Console"] = consoleContent
+
+local consoleTitle = Instance.new("TextLabel", consoleContent)
+consoleTitle.Size = UDim2.new(1,0,0,30)
+consoleTitle.Text = "Console Output"
+consoleTitle.TextSize = 16
+consoleTitle.Font = Enum.Font.GothamBold
+consoleTitle.TextColor3 = Color3.fromRGB(255,255,255)
+consoleTitle.TextXAlignment = Enum.TextXAlignment.Left
+consoleTitle.BackgroundTransparency = 1
+consoleTitle.ZIndex = 7
+
+local clearConsoleBtn = Instance.new("TextButton", consoleContent)
+clearConsoleBtn.Size = UDim2.fromOffset(80,28)
+clearConsoleBtn.Position = UDim2.new(1,-80,0,1)
+clearConsoleBtn.Text = "Clear"
+clearConsoleBtn.TextSize = 11
+clearConsoleBtn.Font = Enum.Font.GothamBold
+clearConsoleBtn.TextColor3 = Color3.fromRGB(255,255,255)
+clearConsoleBtn.BackgroundColor3 = Color3.fromRGB(140,40,40)
+clearConsoleBtn.BorderSizePixel = 0
+clearConsoleBtn.ZIndex = 8
+
+local clearConsoleCorner = Instance.new("UICorner", clearConsoleBtn)
+clearConsoleCorner.CornerRadius = UDim.new(0,8)
+
+clearConsoleBtn.MouseButton1Click:Connect(function()
+	ConsoleOutput = {}
+	AddConsoleLog("Console cleared", Color3.fromRGB(150,150,255))
+end)
+
+local consoleScroll = Instance.new("ScrollingFrame", consoleContent)
+consoleScroll.Size = UDim2.new(1,0,1,-40)
+consoleScroll.Position = UDim2.fromOffset(0,35)
+consoleScroll.BackgroundColor3 = Color3.fromRGB(15,15,15)
+consoleScroll.BorderSizePixel = 0
+consoleScroll.ZIndex = 7
+consoleScroll.ScrollBarThickness = 4
+consoleScroll.ScrollBarImageColor3 = Color3.fromRGB(60,60,60)
+
+local consoleCorner = Instance.new("UICorner", consoleScroll)
+consoleCorner.CornerRadius = UDim.new(0,10)
+
+local consoleLayout = Instance.new("UIListLayout", consoleScroll)
+consoleLayout.Padding = UDim.new(0,3)
+
+local consolePadding = Instance.new("UIPadding", consoleScroll)
+consolePadding.PaddingTop = UDim.new(0,5)
+consolePadding.PaddingLeft = UDim.new(0,5)
+consolePadding.PaddingRight = UDim.new(0,5)
+
+-- ================= SETTINGS TAB =================
+local settingsContent = Instance.new("Frame", contentArea)
+settingsContent.Name = "SettingsContent"
+settingsContent.Size = UDim2.new(1,0,1,0)
+settingsContent.BackgroundTransparency = 1
+settingsContent.Visible = false
+settingsContent.ZIndex = 6
+tabContents["Settings"] = settingsContent
+
+local settingsTitle = Instance.new("TextLabel", settingsContent)
+settingsTitle.Size = UDim2.new(1,0,0,30)
+settingsTitle.Text = "Settings"
+settingsTitle.TextSize = 16
+settingsTitle.Font = Enum.Font.GothamBold
+settingsTitle.TextColor3 = Color3.fromRGB(255,255,255)
+settingsTitle.TextXAlignment = Enum.TextXAlignment.Left
+settingsTitle.BackgroundTransparency = 1
+settingsTitle.ZIndex = 7
+
+local settingsScroll = Instance.new("ScrollingFrame", settingsContent)
+settingsScroll.Size = UDim2.new(1,0,1,-40)
+settingsScroll.Position = UDim2.fromOffset(0,35)
+settingsScroll.BackgroundColor3 = Color3.fromRGB(20,20,20)
+settingsScroll.BorderSizePixel = 0
+settingsScroll.ZIndex = 7
+settingsScroll.ScrollBarThickness = 4
+settingsScroll.ScrollBarImageColor3 = Color3.fromRGB(60,60,60)
+
+local settingsScrollCorner = Instance.new("UICorner", settingsScroll)
+settingsScrollCorner.CornerRadius = UDim.new(0,10)
+
+local settingsLayout = Instance.new("UIListLayout", settingsScroll)
+settingsLayout.Padding = UDim.new(0,10)
+
+local settingsPadding = Instance.new("UIPadding", settingsScroll)
+settingsPadding.PaddingTop = UDim.new(0,10)
+settingsPadding.PaddingLeft = UDim.new(0,10)
+settingsPadding.PaddingRight = UDim.new(0,10)
+
+local function CreateToggle(name, desc, settingKey)
+	local frame = Instance.new("Frame", settingsScroll)
+	frame.Size = UDim2.new(1,-20,0,60)
+	frame.BackgroundColor3 = Color3.fromRGB(25,25,25)
+	frame.BorderSizePixel = 0
+	frame.ZIndex = 8
+	
+	local frameCorner = Instance.new("UICorner", frame)
+	frameCorner.CornerRadius = UDim.new(0,8)
+	
+	local titleLabel = Instance.new("TextLabel", frame)
+	titleLabel.Size = UDim2.new(1,-70,0,20)
+	titleLabel.Position = UDim2.fromOffset(10,8)
+	titleLabel.Text = name
+	titleLabel.TextSize = 13
+	titleLabel.Font = Enum.Font.GothamBold
+	titleLabel.TextColor3 = Color3.fromRGB(255,255,255)
+	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.ZIndex = 9
+	
+	local descLabel = Instance.new("TextLabel", frame)
+	descLabel.Size = UDim2.new(1,-70,0,16)
+	descLabel.Position = UDim2.fromOffset(10,30)
+	descLabel.Text = desc
+	descLabel.TextSize = 10
+	descLabel.Font = Enum.Font.Gotham
+	descLabel.TextColor3 = Color3.fromRGB(150,150,150)
+	descLabel.TextXAlignment = Enum.TextXAlignment.Left
+	descLabel.BackgroundTransparency = 1
+	descLabel.ZIndex = 9
+	descLabel.TextWrapped = true
+	
+	local toggleBtn = Instance.new("TextButton", frame)
+	toggleBtn.Size = UDim2.fromOffset(50,26)
+	toggleBtn.Position = UDim2.new(1,-60,0.5,-13)
+	toggleBtn.Text = ""
+	toggleBtn.BackgroundColor3 = Settings[settingKey] and Color3.fromRGB(40,140,40) or Color3.fromRGB(60,60,60)
+	toggleBtn.BorderSizePixel = 0
+	toggleBtn.ZIndex = 9
+	
+	local toggleCorner = Instance.new("UICorner", toggleBtn)
+	toggleCorner.CornerRadius = UDim.new(1,0)
+	
+	local toggleCircle = Instance.new("Frame", toggleBtn)
+	toggleCircle.Size = UDim2.fromOffset(20,20)
+	toggleCircle.Position = Settings[settingKey] and UDim2.new(1,-23,0.5,-10) or UDim2.fromOffset(3,3)
+	toggleCircle.BackgroundColor3 = Color3.fromRGB(255,255,255)
+	toggleCircle.BorderSizePixel = 0
+	toggleCircle.ZIndex = 10
+	
+	local circleCorner = Instance.new("UICorner", toggleCircle)
+	circleCorner.CornerRadius = UDim.new(1,0)
+	
+	toggleBtn.MouseButton1Click:Connect(function()
+		Settings[settingKey] = not Settings[settingKey]
+		SaveSettings()
+		
+		TweenService:Create(toggleBtn, TweenInfo.new(0.2), {
+			BackgroundColor3 = Settings[settingKey] and Color3.fromRGB(40,140,40) or Color3.fromRGB(60,60,60)
+		}):Play()
+		
+		TweenService:Create(toggleCircle, TweenInfo.new(0.2), {
+			Position = Settings[settingKey] and UDim2.new(1,-23,0.5,-10) or UDim2.fromOffset(3,3)
+		}):Play()
+		
+		AddConsoleLog(name.." "..(Settings[settingKey] and "enabled" or "disabled"), Color3.fromRGB(100,200,255))
+	end)
+end
+
+CreateToggle("Anti-Scam Protection", "Blocks scripts that mention Robux or Premium", "AntiScam")
+
+settingsScroll.CanvasSize = UDim2.new(0,0,0,settingsLayout.AbsoluteContentSize.Y + 20)
+
+-- ================= FLOATING BUTTON =================
+local btn = Instance.new("ImageButton")
+btn.Parent = gui
+btn.Size = UDim2.fromOffset(50,50)
+btn.Position = UDim2.new(0.5,0,0.1,0)
+btn.AnchorPoint = Vector2.new(0.5,0.5)
+btn.Image = "rbxassetid://126759832347064"
+btn.BackgroundColor3 = Color3.fromRGB(25,25,25)
+btn.BorderSizePixel = 0
+btn.AutoButtonColor = false
+btn.ZIndex = 100
+
+local btnCorner = Instance.new("UICorner", btn)
+btnCorner.CornerRadius = UDim.new(0,15)
+
+local btnStroke = Instance.new("UIStroke", btn)
+btnStroke.Color = Color3.fromRGB(60,60,60)
+btnStroke.Thickness = 2
+btnStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+local dragging = false
+local dragInput, dragStart, startPos
+local dragThreshold = 5
+local hasMoved = false
+
+btn.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		dragInput = input
+		dragStart = input.Position
+		startPos = btn.Position
+		hasMoved = false
+		
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+				if not hasMoved then
+					mainWindow.Visible = not mainWindow.Visible
+					if mainWindow.Visible then
+						mainWindow.Size = UDim2.fromOffset(0,0)
+						TweenService:Create(mainWindow, TweenInfo.new(0.3, Enum.EasingStyle.Back), {Size = UDim2.fromOffset(450,520)}):Play()
+						AddConsoleLog("Executor opened", Color3.fromRGB(100,200,255))
+					else
+						AddConsoleLog("Executor closed", Color3.fromRGB(255,150,100))
+					end
+				end
+			end
+		end)
+	end
+end)
+
+UIS.InputChanged:Connect(function(input)
+	if dragging and input == dragInput then
+		local delta = input.Position - dragStart
+		if math.abs(delta.X) > dragThreshold or math.abs(delta.Y) > dragThreshold then
+			hasMoved = true
+			btn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+		end
+	end
+end)
+
+-- ================= UPDATE SYSTEMS =================
+local lastUpdate = tick()
+local frameCount = 0
+
+RunService.RenderStepped:Connect(function()
+	frameCount = frameCount + 1
+	
+	if tick() - lastUpdate >= 1 then
+		Settings.FPS = frameCount
+		pcall(function()
+			Settings.Ping = math.floor(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue())
+		end)
+		Settings.Graphics = game:GetService("UserSettings")():GetService("UserGameSettings").SavedQualityLevel
+		
+		fpsValue.Text = Settings.FPS.." FPS"
+		pingValue.Text = Settings.Ping.." ms"
+		graphicsValue.Text = "Level "..Settings.Graphics
+		
+		frameCount = 0
+		lastUpdate = tick()
+	end
+end)
+
+-- Update Players List
+local function UpdatePlayersList()
+	for _, child in pairs(playersScroll:GetChildren()) do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+	
+	for _, plr in ipairs(Players:GetPlayers()) do
+		local playerFrame = Instance.new("Frame", playersScroll)
+		playerFrame.Size = UDim2.new(1,-10,0,35)
+		playerFrame.BackgroundColor3 = Color3.fromRGB(25,25,25)
+		playerFrame.BorderSizePixel = 0
+		playerFrame.ZIndex = 8
+		
+		local playerCorner = Instance.new("UICorner", playerFrame)
+		playerCorner.CornerRadius = UDim.new(0,8)
+		
+		local playerName = Instance.new("TextLabel", playerFrame)
+		playerName.Size = UDim2.new(1,-10,1,0)
+		playerName.Position = UDim2.fromOffset(5,0)
+		playerName.Text = plr.Name
+		playerName.TextSize = 12
+		playerName.Font = Enum.Font.Gotham
+		playerName.TextColor3 = Color3.fromRGB(220,220,220)
+		playerName.TextXAlignment = Enum.TextXAlignment.Left
+		playerName.BackgroundTransparency = 1
+		playerName.ZIndex = 9
+	end
+	
+	playersScroll.CanvasSize = UDim2.new(0,0,0,playersLayout.AbsoluteContentSize.Y + 10)
+end
+
+Players.PlayerAdded:Connect(UpdatePlayersList)
+Players.PlayerRemoving:Connect(UpdatePlayersList)
+UpdatePlayersList()
+
+-- Update Console
+spawn(function()
+	while wait(0.5) do
+		for _, child in pairs(consoleScroll:GetChildren()) do
+			if child:IsA("TextLabel") then
+				child:Destroy()
+			end
+		end
+		
+		for i, log in ipairs(ConsoleOutput) do
+			local logLabel = Instance.new("TextLabel", consoleScroll)
+			logLabel.Size = UDim2.new(1,-10,0,20)
+			logLabel.Text = "["..log.Time.."] "..log.Text
+			logLabel.TextSize = 11
+			logLabel.Font = Enum.Font.Code
+			logLabel.TextColor3 = log.Color
+			logLabel.TextXAlignment = Enum.TextXAlignment.Left
+			logLabel.BackgroundColor3 = Color3.fromRGB(20,20,20)
+			logLabel.BorderSizePixel = 0
+			logLabel.ZIndex = 8
+			
+			local logCorner = Instance.new("UICorner", logLabel)
+			logCorner.CornerRadius = UDim.new(0,6)
+		end
+		
+		consoleScroll.CanvasSize = UDim2.new(0,0,0,consoleLayout.AbsoluteContentSize.Y + 10)
+	end
+end)
+
+-- Initial setup
+tabButtons["Execution"].Button.BackgroundColor3 = Color3.fromRGB(35,35,35)
+tabButtons["Execution"].Icon.TextColor3 = Color3.fromRGB(255,255,255)
+AddConsoleLog("✓ Executor loaded successfully", Color3.fromRGB(150,255,150))
+RefreshScripts()
