@@ -1,3 +1,635 @@
+Here's the continuation from `if part:Is`:
+
+```lua
+    if part:IsDescendantOf(character) then return false end
+    if part.Name:match("^Handle_") then return false end
+    return true
+end
+
+-- Create main draggable frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 70, 0, 280)
+mainFrame.Position = UDim2.new(0, 10, 0.5, -140)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = mainFrame
+
+local shadow = Instance.new("ImageLabel")
+shadow.Name = "Shadow"
+shadow.BackgroundTransparency = 1
+shadow.Position = UDim2.new(0, -15, 0, -15)
+shadow.Size = UDim2.new(1, 30, 1, 30)
+shadow.ZIndex = 0
+shadow.Image = "rbxasset://textures/ui/Shadow.png"
+shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+shadow.ImageTransparency = 0.7
+shadow.ScaleType = Enum.ScaleType.Slice
+shadow.SliceCenter = Rect.new(10, 10, 118, 118)
+shadow.Parent = mainFrame
+
+local titleBar = Instance.new("TextLabel")
+titleBar.Size = UDim2.new(1, 0, 0, 25)
+titleBar.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+titleBar.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleBar.Text = "FX3"
+titleBar.Font = Enum.Font.GothamBold
+titleBar.TextSize = 14
+titleBar.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 10)
+titleCorner.Parent = titleBar
+
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Size = UDim2.new(1, -6, 1, -31)
+scrollFrame.Position = UDim2.new(0, 3, 0, 28)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.BorderSizePixel = 0
+scrollFrame.ScrollBarThickness = 4
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 460)
+scrollFrame.Parent = mainFrame
+
+local buttonRefs = {}
+
+local function createButton(name, position, callback, color)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -8, 0, 38)
+    btn.Position = UDim2.new(0, 4, 0, position)
+    btn.BackgroundColor3 = color or Color3.fromRGB(50, 50, 55)
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.Text = name
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 11
+    btn.BorderSizePixel = 0
+    btn.AutoButtonColor = false
+    btn.Parent = scrollFrame
+    
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 8)
+    btnCorner.Parent = btn
+    
+    local highlight = Instance.new("UIStroke")
+    highlight.Color = Color3.fromRGB(100, 200, 255)
+    highlight.Thickness = 0
+    highlight.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    highlight.Parent = btn
+    
+    btn.MouseButton1Click:Connect(callback)
+    
+    buttonRefs[name] = {button = btn, highlight = highlight, color = color or Color3.fromRGB(50, 50, 55)}
+    return btn
+end
+
+local function setActiveButton(name)
+    for btnName, data in pairs(buttonRefs) do
+        data.highlight.Thickness = 0
+        data.button.BackgroundColor3 = data.color
+    end
+    
+    if buttonRefs[name] then
+        buttonRefs[name].highlight.Thickness = 3
+        local c = buttonRefs[name].color
+        buttonRefs[name].button.BackgroundColor3 = Color3.fromRGB(
+            math.min(c.R * 255 + 30, 255),
+            math.min(c.G * 255 + 30, 255),
+            math.min(c.B * 255 + 30, 255)
+        )
+    end
+end
+
+createButton("Select", 3, function()
+    if mode == "Select" then
+        mode = "None"
+        setActiveButton(nil)
+    else
+        mode = "Select"
+        setActiveButton("Select")
+        clearResizeHandles()
+    end
+end, Color3.fromRGB(60, 120, 180))
+
+createButton("Move", 45, function()
+    if mode == "Move" then
+        mode = "None"
+        setActiveButton(nil)
+        clearResizeHandles()
+    else
+        mode = "Move"
+        setActiveButton("Move")
+        if selectedPart then createResizeHandles() end
+    end
+end, Color3.fromRGB(80, 160, 80))
+
+createButton("Resize", 87, function()
+    if mode == "Resize" then
+        mode = "None"
+        setActiveButton(nil)
+        clearResizeHandles()
+    else
+        mode = "Resize"
+        setActiveButton("Resize")
+        if selectedPart then createResizeHandles() end
+    end
+end, Color3.fromRGB(200, 140, 50))
+
+createButton("Rotate", 129, function()
+    if mode == "Rotate" then
+        mode = "None"
+        setActiveButton(nil)
+    else
+        mode = "Rotate"
+        setActiveButton("Rotate")
+        clearResizeHandles()
+    end
+end, Color3.fromRGB(160, 80, 160))
+
+createButton("Place", 171, function()
+    if mode == "Place" then
+        mode = "None"
+        setActiveButton(nil)
+        placementPanel.Visible = false
+    else
+        mode = "Place"
+        setActiveButton("Place")
+        placementPanel.Visible = true
+        clearResizeHandles()
+    end
+end, Color3.fromRGB(50, 180, 180))
+
+createButton("Delete", 213, function()
+    if selectedPart and selectedPart.Parent and isValidSelection(selectedPart) then
+        selectedPart:Destroy()
+        selectedPart = nil
+        clearResizeHandles()
+    end
+end, Color3.fromRGB(200, 60, 60))
+
+createButton("Clone", 255, function()
+    if selectedPart and isValidSelection(selectedPart) then
+        local clone = selectedPart:Clone()
+        clone.Position = selectedPart.Position + Vector3.new(5, 0, 0)
+        clone.Parent = workspace
+    end
+end, Color3.fromRGB(100, 100, 180))
+
+createButton("Material", 297, function()
+    if mode == "Material" then
+        mode = "None"
+        setActiveButton(nil)
+        materialPanel.Visible = false
+    else
+        mode = "Material"
+        setActiveButton("Material")
+        materialPanel.Visible = true
+        clearResizeHandles()
+    end
+end, Color3.fromRGB(130, 90, 140))
+
+createButton("Color", 339, function()
+    if mode == "Color" then
+        mode = "None"
+        setActiveButton(nil)
+        colorPanel.Visible = false
+    else
+        mode = "Color"
+        setActiveButton("Color")
+        colorPanel.Visible = true
+        clearResizeHandles()
+    end
+end, Color3.fromRGB(180, 90, 90))
+
+createButton("Anchor", 381, function()
+    if selectedPart and isValidSelection(selectedPart) then
+        selectedPart.Anchored = not selectedPart.Anchored
+    end
+end, Color3.fromRGB(90, 140, 90))
+
+createButton("Collision", 423, function()
+    if selectedPart and isValidSelection(selectedPart) then
+        selectedPart.CanCollide = not selectedPart.CanCollide
+    end
+end, Color3.fromRGB(140, 140, 90))
+
+local resizeModeFrame = Instance.new("Frame")
+resizeModeFrame.Size = UDim2.new(0, 85, 0, 75)
+resizeModeFrame.Position = UDim2.new(0, 90, 0.5, -140)
+resizeModeFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+resizeModeFrame.BorderSizePixel = 0
+resizeModeFrame.Active = true
+resizeModeFrame.Draggable = true
+resizeModeFrame.Parent = screenGui
+
+local rCorner = Instance.new("UICorner")
+rCorner.CornerRadius = UDim.new(0, 10)
+rCorner.Parent = resizeModeFrame
+
+local resizeModeLabel = Instance.new("TextLabel")
+resizeModeLabel.Size = UDim2.new(1, 0, 0, 25)
+resizeModeLabel.BackgroundTransparency = 1
+resizeModeLabel.TextColor3 = Color3.new(1, 1, 1)
+resizeModeLabel.Text = "Size: ∞"
+resizeModeLabel.Font = Enum.Font.GothamBold
+resizeModeLabel.TextSize = 11
+resizeModeLabel.Parent = resizeModeFrame
+
+local resizeInput = Instance.new("TextBox")
+resizeInput.Size = UDim2.new(1, -10, 0, 30)
+resizeInput.Position = UDim2.new(0, 5, 0, 30)
+resizeInput.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+resizeInput.TextColor3 = Color3.new(1, 1, 1)
+resizeInput.PlaceholderText = "0 = ∞"
+resizeInput.Text = "0"
+resizeInput.Font = Enum.Font.Gotham
+resizeInput.TextSize = 11
+resizeInput.BorderSizePixel = 0
+resizeInput.Parent = resizeModeFrame
+
+local inputCorner = Instance.new("UICorner")
+inputCorner.CornerRadius = UDim.new(0, 6)
+inputCorner.Parent = resizeInput
+
+resizeInput.FocusLost:Connect(function()
+    local num = tonumber(resizeInput.Text) or 0
+    resizeMode = math.max(0, num)
+    resizeModeLabel.Text = resizeMode == 0 and "Size: ∞" or "Size: " .. resizeMode
+end)
+
+function createResizeHandles()
+    clearResizeHandles()
+    if not selectedPart then return end
+    
+    local handleSize = 1.2
+    local directions = {
+        {name = "Top", offset = Vector3.new(0, 1, 0), color = Color3.fromRGB(255, 100, 100)},
+        {name = "Bottom", offset = Vector3.new(0, -1, 0), color = Color3.fromRGB(100, 100, 255)},
+        {name = "Front", offset = Vector3.new(0, 0, -1), color = Color3.fromRGB(100, 255, 100)},
+        {name = "Back", offset = Vector3.new(0, 0, 1), color = Color3.fromRGB(255, 255, 100)},
+        {name = "Left", offset = Vector3.new(-1, 0, 0), color = Color3.fromRGB(255, 100, 255)},
+        {name = "Right", offset = Vector3.new(1, 0, 0), color = Color3.fromRGB(100, 255, 255)}
+    }
+    
+    for _, dir in ipairs(directions) do
+        local handle = Instance.new("Part")
+        handle.Name = "Handle_" .. dir.name
+        handle.Shape = Enum.PartType.Ball
+        handle.Size = Vector3.new(handleSize, handleSize, handleSize)
+        handle.Color = dir.color
+        handle.Material = Enum.Material.Glass
+        handle.Transparency = 0.5
+        handle.Anchored = true
+        handle.CanCollide = false
+        handle.TopSurface = Enum.SurfaceType.Smooth
+        handle.BottomSurface = Enum.SurfaceType.Smooth
+        
+        local offset = dir.offset * (selectedPart.Size / 2 + Vector3.new(handleSize * 0.8, handleSize * 0.8, handleSize * 0.8))
+        handle.Position = selectedPart.Position + offset
+        handle.Parent = workspace
+        
+        table.insert(resizeHandles, {part = handle, direction = dir.offset, name = dir.name})
+        
+        local detector = Instance.new("ClickDetector")
+        detector.MaxActivationDistance = 100
+        detector.Parent = handle
+        
+        detector.MouseHoverEnter:Connect(function()
+            handle.Transparency = 0.2
+        end)
+        
+        detector.MouseHoverLeave:Connect(function()
+            handle.Transparency = 0.5
+        end)
+    end
+end
+
+function updateHandlePositions()
+    if not selectedPart then return end
+    for _, handleData in ipairs(resizeHandles) do
+        local offset = handleData.direction * (selectedPart.Size / 2 + Vector3.new(0.96, 0.96, 0.96))
+        handleData.part.Position = selectedPart.Position + offset
+    end
+end
+
+function clearResizeHandles()
+    for _, handleData in ipairs(resizeHandles) do
+        if handleData.part then
+            handleData.part:Destroy()
+        end
+    end
+    resizeHandles = {}
+end
+
+local function getClosestHandle()
+    local closestHandle = nil
+    local closestDist = math.huge
+    
+    for _, handleData in ipairs(resizeHandles) do
+        local screenPos, onScreen = workspace.CurrentCamera:WorldToScreenPoint(handleData.part.Position)
+        if onScreen then
+            local dist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(mouse.X, mouse.Y)).Magnitude
+            if dist < closestDist and dist < 50 then
+                closestDist = dist
+                closestHandle = handleData
+            end
+        end
+    end
+    
+    return closestHandle
+end
+
+mouse.Button1Down:Connect(function()
+    if isPlacingObject and objectToPlace then
+        local part
+        if objectToPlace.type then
+            part = Instance.new(objectToPlace.type)
+        else
+            part = Instance.new("Part")
+            if objectToPlace.shape then
+                part.Shape = Enum.PartType[objectToPlace.shape]
+            end
+        end
+        
+        part.Size = Vector3.new(4, 4, 4)
+        part.Position = mouse.Hit.Position + Vector3.new(0, 2, 0)
+        part.Anchored = true
+        part.Parent = workspace
+        
+        selectedPart = part
+        isPlacingObject = false
+        objectToPlace = nil
+        mode = "Select"
+        setActiveButton("Select")
+        selectionBox.Adornee = selectedPart
+        return
+    end
+    
+    if mode == "Move" or mode == "Resize" then
+        local handle = getClosestHandle()
+        if handle then
+            draggingHandle = handle
+            dragStart = mouse.Hit.Position
+            partStartPos = selectedPart.Position
+            partStartSize = selectedPart.Size
+        end
+    elseif mode == "Select" or mode == "Move" or mode == "Resize" or mode == "Rotate" then
+        if mouse.Target and isValidSelection(mouse.Target) then
+            if selectedPart ~= mouse.Target then
+                clearResizeHandles()
+                selectedPart = mouse.Target
+                selectionBox.Adornee = selectedPart
+                if mode == "Move" or mode == "Resize" then
+                    createResizeHandles()
+                end
+            end
+        end
+    end
+end)
+
+mouse.Button1Up:Connect(function()
+    draggingHandle = nil
+    dragStart = nil
+    partStartPos = nil
+    partStartSize = nil
+end)
+
+local placementPanel = Instance.new("Frame")
+placementPanel.Size = UDim2.new(0, 180, 0, 320)
+placementPanel.Position = UDim2.new(0.5, -90, 0.5, -160)
+placementPanel.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+placementPanel.BorderSizePixel = 0
+placementPanel.Visible = false
+placementPanel.Active = true
+placementPanel.Draggable = true
+placementPanel.Parent = screenGui
+
+local pCorner = Instance.new("UICorner")
+pCorner.CornerRadius = UDim.new(0, 10)
+pCorner.Parent = placementPanel
+
+local placementTitle = Instance.new("TextLabel")
+placementTitle.Size = UDim2.new(1, 0, 0, 30)
+placementTitle.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+placementTitle.TextColor3 = Color3.new(1, 1, 1)
+placementTitle.Text = "Place Object"
+placementTitle.Font = Enum.Font.GothamBold
+placementTitle.TextSize = 13
+placementTitle.BorderSizePixel = 0
+placementTitle.Parent = placementPanel
+
+local pTitleCorner = Instance.new("UICorner")
+pTitleCorner.CornerRadius = UDim.new(0, 10)
+pTitleCorner.Parent = placementTitle
+
+local placeScroll = Instance.new("ScrollingFrame")
+placeScroll.Size = UDim2.new(1, -10, 1, -75)
+placeScroll.Position = UDim2.new(0, 5, 0, 35)
+placeScroll.BackgroundTransparency = 1
+placeScroll.BorderSizePixel = 0
+placeScroll.ScrollBarThickness = 4
+placeScroll.CanvasSize = UDim2.new(0, 0, 0, 400)
+placeScroll.Parent = placementPanel
+
+local objects = {
+    {name = "Block", shape = "Block"},
+    {name = "Sphere", shape = "Ball"},
+    {name = "Cylinder", shape = "Cylinder"},
+    {name = "Wedge", type = "WedgePart"},
+    {name = "Corner", type = "CornerWedgePart"},
+    {name = "Spawn", type = "SpawnLocation"},
+    {name = "Seat", type = "Seat"},
+    {name = "Vehicle", type = "VehicleSeat"},
+    {name = "Truss", type = "TrussPart"}
+}
+
+for i, obj in ipairs(objects) do
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -8, 0, 35)
+    btn.Position = UDim2.new(0, 4, 0, (i - 1) * 40)
+    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.Text = obj.name
+    btn.Font = Enum.Font.Gotham
+    btn.TextSize = 12
+    btn.BorderSizePixel = 0
+    btn.Parent = placeScroll
+    
+    local objCorner = Instance.new("UICorner")
+    objCorner.CornerRadius = UDim.new(0, 6)
+    objCorner.Parent = btn
+    
+    btn.MouseButton1Click:Connect(function()
+        objectToPlace = obj
+        placementPanel.Visible = false
+        isPlacingObject = true
+    end)
+end
+
+local closePlacePanel = Instance.new("TextButton")
+closePlacePanel.Size = UDim2.new(1, -10, 0, 30)
+closePlacePanel.Position = UDim2.new(0, 5, 1, -35)
+closePlacePanel.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+closePlacePanel.TextColor3 = Color3.new(1, 1, 1)
+closePlacePanel.Text = "Close"
+closePlacePanel.Font = Enum.Font.GothamBold
+closePlacePanel.TextSize = 12
+closePlacePanel.BorderSizePixel = 0
+closePlacePanel.Parent = placementPanel
+
+local cpCorner = Instance.new("UICorner")
+cpCorner.CornerRadius = UDim.new(0, 6)
+cpCorner.Parent = closePlacePanel
+
+closePlacePanel.MouseButton1Click:Connect(function()
+    placementPanel.Visible = false
+    mode = "None"
+    setActiveButton(nil)
+end)
+
+local materialPanel = Instance.new("Frame")
+materialPanel.Size = UDim2.new(0, 180, 0, 320)
+materialPanel.Position = UDim2.new(0.5, -90, 0.5, -160)
+materialPanel.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+materialPanel.BorderSizePixel = 0
+materialPanel.Visible = false
+materialPanel.Active = true
+materialPanel.Draggable = true
+materialPanel.Parent = screenGui
+
+local mCorner = Instance.new("UICorner")
+mCorner.CornerRadius = UDim.new(0, 10)
+mCorner.Parent = materialPanel
+
+local matTitle = Instance.new("TextLabel")
+matTitle.Size = UDim2.new(1, 0, 0, 30)
+matTitle.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+matTitle.TextColor3 = Color3.new(1, 1, 1)
+matTitle.Text = "Select Material"
+matTitle.Font = Enum.Font.GothamBold
+matTitle.TextSize = 13
+matTitle.BorderSizePixel = 0
+matTitle.Parent = materialPanel
+
+local mTitleCorner = Instance.new("UICorner")
+mTitleCorner.CornerRadius = UDim.new(0, 10)
+mTitleCorner.Parent = matTitle
+
+local matScroll = Instance.new("ScrollingFrame")
+matScroll.Size = UDim2.new(1, -10, 1, -75)
+matScroll.Position = UDim2.new(0, 5, 0, 35)
+matScroll.BackgroundTransparency = 1
+matScroll.BorderSizePixel = 0
+matScroll.ScrollBarThickness = 4
+matScroll.CanvasSize = UDim2.new(0, 0, 0, 900)
+matScroll.Parent = materialPanel
+
+local materials = {"Plastic", "Wood", "Slate", "Concrete", "CorrodedMetal", "DiamondPlate", "Foil", "Grass", 
+                   "Ice", "Marble", "Granite", "Brick", "Pebble", "Sand", "Fabric", "SmoothPlastic", "Metal", 
+                   "WoodPlanks", "Cobblestone", "Glass", "Neon", "ForceField"}
+
+for i, mat in ipairs(materials) do
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -8, 0, 32)
+    btn.Position = UDim2.new(0, 4, 0, (i - 1) * 37)
+    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.Text = mat
+    btn.Font = Enum.Font.Gotham
+    btn.TextSize = 11
+    btn.BorderSizePixel = 0
+    btn.Parent = matScroll
+    
+    local matBtnCorner = Instance.new("UICorner")
+    matBtnCorner.CornerRadius = UDim.new(0, 6)
+    matBtnCorner.Parent = btn
+    
+    btn.MouseButton1Click:Connect(function()
+        if selectedPart and isValidSelection(selectedPart) then
+            selectedPart.Material = Enum.Material[mat]
+        end
+    end)
+end
+
+local closeMatPanel = Instance.new("TextButton")
+closeMatPanel.Size = UDim2.new(1, -10, 0, 30)
+closeMatPanel.Position = UDim2.new(0, 5, 1, -35)
+closeMatPanel.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+closeMatPanel.TextColor3 = Color3.new(1, 1, 1)
+closeMatPanel.Text = "Close"
+closeMatPanel.Font = Enum.Font.GothamBold
+closeMatPanel.TextSize = 12
+closeMatPanel.BorderSizePixel = 0
+closeMatPanel.Parent = materialPanel
+
+local cmCorner = Instance.new("UICorner")
+cmCorner.CornerRadius = UDim.new(0, 6)
+cmCorner.Parent = closeMatPanel
+
+closeMatPanel.MouseButton1Click:Connect(function()
+    materialPanel.Visible = false
+    mode = "None"
+    setActiveButton(nil)
+end)
+
+local colorPanel = Instance.new("Frame")
+colorPanel.Size = UDim2.new(0, 180, 0, 240)
+colorPanel.Position = UDim2.new(0.5, -90, 0.5, -120)
+colorPanel.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+colorPanel.BorderSizePixel = 0
+colorPanel.Visible = false
+colorPanel.Active = true
+colorPanel.Draggable = true
+colorPanel.Parent = screenGui
+
+local cCorner = Instance.new("UICorner")
+cCorner.CornerRadius = UDim.new(0, 10)
+cCorner.Parent = colorPanel
+
+local colTitle = Instance.new("TextLabel")
+colTitle.Size = UDim2.new(1, 0, 0, 30)
+colTitle.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+colTitle.TextColor3 = Color3.new(1, 1, 1)
+colTitle.Text = "Select Color"
+colTitle.Font = Enum.Font.GothamBold
+colTitle.TextSize = 13
+colTitle.BorderSizePixel = 0
+colTitle.Parent = colorPanel
+
+local cTitleCorner = Instance.new("UICorner")
+cTitleCorner.CornerRadius = UDim.new(0, 10)
+cTitleCorner.Parent = colTitle
+
+local colors = {
+    Color3.fromRGB(255, 0, 0), Color3.fromRGB(0, 255, 0), Color3.fromRGB(0, 0, 255),
+    Color3.fromRGB(255, 255, 0), Color3.fromRGB(255, 0, 255), Color3.fromRGB(0, 255, 255),
+    Color3.fromRGB(255, 128, 0), Color3.fromRGB(128, 0, 255), Color3.fromRGB(255, 255, 255),
+    Color3.fromRGB(0, 0, 0), Color3.fromRGB(128, 128, 128), Color3.fromRGB(255, 192, 203)
+}
+
+for i, col in ipairs(colors) do
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.3, -6, 0, 45)
+    btn.Position = UDim2.new((i - 1) % 3 * 0.333, 5 + ((i - 1) % 3) * 3, 0, 35 + math.floor((i - 1) / 3) * 50)
+    btn.BackgroundColor3 = col
+    btn.Text = ""
+    btn.BorderSizePixel = 0
+    btn.Parent = colorPanel
+    
+    local colBtnCorner = Instance.new("UICorner")
+    colBtnCorner.CornerRadius = UDim.new(0, 6)
+    colBtnCorner.Parent = btn
+    
+    btn.MouseButton1Click:Connect(function()
+        if selectedPart and isValidSelection(selectedPart) then
+            selectedPart.Color = col
+        end
+    end)
+end
+
 local closeColPanel = Instance.new("TextButton")
 closeColPanel.Size = UDim2.new(1, -10, 0, 30)
 closeColPanel.Position = UDim2.new(0, 5, 1, -35)
@@ -45,7 +677,8 @@ RunService.RenderStepped:Connect(function()
                 local snapDist = math.floor(direction:Dot(delta) / resizeMode + 0.5) * resizeMode
                 local snappedChange = direction * snapDist * 2
                 selectedPart.Size = (partStartSize + snappedChange):Max(Vector3.new(0.5, 0.5, 0.5))
-                selectedPart.Position = partStartPos + direction * snapDistend
+                selectedPart.Position = partStartPos + direction * snapDist
+            end
             updateHandlePositions()
         end
     end
