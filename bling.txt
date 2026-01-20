@@ -1,0 +1,664 @@
+-- Roblox Mobile-Friendly UI with Particle Animation
+-- Place this in StarterGui as a LocalScript
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local Stats = game:GetService("Stats")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "BlingUI"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = playerGui
+
+-- Helper function to create rounded frames
+local function createRoundedFrame(parent, name, size, position, bgColor, cornerRadius)
+	local frame = Instance.new("Frame")
+	frame.Name = name
+	frame.Size = size
+	frame.Position = position
+	frame.BackgroundColor3 = bgColor
+	frame.BorderSizePixel = 0
+	frame.ClipsDescendants = true
+	frame.Parent = parent
+	
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, cornerRadius or 12)
+	corner.Parent = frame
+	
+	return frame
+end
+
+-- Add gradient to frame
+local function addGradient(frame, color1, color2, rotation)
+	local gradient = Instance.new("UIGradient")
+	gradient.Color = ColorSequence.new(color1, color2)
+	gradient.Rotation = rotation or 45
+	gradient.Parent = frame
+	return gradient
+end
+
+-- Main Container (Rectangle shape - minimal corner radius)
+local mainContainer = Instance.new("Frame")
+mainContainer.Name = "MainContainer"
+mainContainer.Size = UDim2.new(0, 340, 0, 500)
+mainContainer.Position = UDim2.new(0.5, -170, 0.5, -250)
+mainContainer.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+mainContainer.BorderSizePixel = 0
+mainContainer.ClipsDescendants = false
+mainContainer.Visible = false
+mainContainer.Parent = screenGui
+
+local containerCorner = Instance.new("UICorner")
+containerCorner.CornerRadius = UDim.new(0, 4)
+containerCorner.Parent = mainContainer
+
+-- Particle Container
+local particleContainer = Instance.new("Frame")
+particleContainer.Name = "ParticleContainer"
+particleContainer.Size = UDim2.new(1, 0, 1, 0)
+particleContainer.BackgroundTransparency = 1
+particleContainer.ClipsDescendants = false
+particleContainer.Parent = screenGui
+
+-- Particle Formation Animation Function
+local function playParticleAnimation()
+	-- Clear old particles
+	for _, child in pairs(particleContainer:GetChildren()) do
+		child:Destroy()
+	end
+	
+	-- Create particles
+	local numParticles = 30
+	local particles = {}
+	
+	for i = 1, numParticles do
+		local particle = Instance.new("Frame")
+		particle.Size = UDim2.new(0, math.random(8, 20), 0, math.random(8, 20))
+		particle.BackgroundColor3 = Color3.fromHSV(math.random(), 0.7, 1)
+		particle.BorderSizePixel = 0
+		particle.Position = UDim2.new(math.random(), 0, math.random(), 0)
+		particle.ZIndex = 10
+		particle.Parent = particleContainer
+		
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, math.random(2, 6))
+		corner.Parent = particle
+		
+		table.insert(particles, particle)
+	end
+	
+	-- Show container immediately but transparent
+	mainContainer.Visible = true
+	mainContainer.BackgroundTransparency = 1
+	for _, child in pairs(mainContainer:GetDescendants()) do
+		if child:IsA("GuiObject") then
+			child.BackgroundTransparency = 1
+			if child:IsA("TextLabel") or child:IsA("TextButton") then
+				child.TextTransparency = 1
+			end
+			if child:IsA("ImageLabel") then
+				child.ImageTransparency = 1
+			end
+			if child:IsA("ScrollingFrame") then
+				child.ScrollBarImageTransparency = 1
+			end
+		end
+	end
+	
+	-- Animate particles to container
+	local targetPos = mainContainer.AbsolutePosition
+	local targetSize = mainContainer.AbsoluteSize
+	
+	for i, particle in pairs(particles) do
+		local delay = (i - 1) * 0.02
+		
+		-- Calculate random position within the container
+		local endX = targetPos.X + math.random(0, targetSize.X)
+		local endY = targetPos.Y + math.random(0, targetSize.Y)
+		
+		task.wait(delay)
+		
+		local tween = TweenService:Create(particle, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.InOut), {
+			Position = UDim2.new(0, endX, 0, endY),
+			Size = UDim2.new(0, 0, 0, 0),
+			BackgroundTransparency = 1
+		})
+		tween:Play()
+	end
+	
+	-- Fade in main container
+	task.wait(0.3)
+	
+	local containerTween = TweenService:Create(mainContainer, TweenInfo.new(0.3), {
+		BackgroundTransparency = 0
+	})
+	containerTween:Play()
+	
+	for _, child in pairs(mainContainer:GetDescendants()) do
+		if child:IsA("GuiObject") then
+			local originalTrans = 0
+			if child.Name == "DragHandle" then
+				originalTrans = 0
+			elseif child.BackgroundColor3 == Color3.fromRGB(15, 15, 20) then
+				originalTrans = 1
+			end
+			
+			TweenService:Create(child, TweenInfo.new(0.3), {
+				BackgroundTransparency = originalTrans
+			}):Play()
+			
+			if child:IsA("TextLabel") or child:IsA("TextButton") then
+				TweenService:Create(child, TweenInfo.new(0.3), {
+					TextTransparency = 0
+				}):Play()
+			end
+			if child:IsA("ImageLabel") then
+				TweenService:Create(child, TweenInfo.new(0.3), {
+					ImageTransparency = 0
+				}):Play()
+			end
+			if child:IsA("ScrollingFrame") then
+				TweenService:Create(child, TweenInfo.new(0.3), {
+					ScrollBarImageTransparency = 0
+				}):Play()
+			end
+		end
+	end
+	
+	-- Clean up particles
+	task.wait(0.8)
+	for _, particle in pairs(particles) do
+		particle:Destroy()
+	end
+end
+
+-- Toggle Button (Always visible, draggable)
+local toggleButton = createRoundedFrame(screenGui, "ToggleButton", UDim2.new(0, 50, 0, 50), UDim2.new(1, -60, 0, 10), Color3.fromRGB(30, 30, 40), 12)
+addGradient(toggleButton, Color3.fromRGB(40, 40, 50), Color3.fromRGB(25, 25, 35), 135)
+
+local toggleLabel = Instance.new("TextLabel")
+toggleLabel.Size = UDim2.new(1, 0, 1, 0)
+toggleLabel.BackgroundTransparency = 1
+toggleLabel.Text = "✨"
+toggleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleLabel.TextSize = 28
+toggleLabel.Font = Enum.Font.GothamBold
+toggleLabel.Parent = toggleButton
+
+-- Toggle Button Logic
+local isDraggingToggle = false
+local toggleDragStart = nil
+local toggleStartPos = nil
+local toggleInputConnection = nil
+
+toggleButton.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		isDraggingToggle = false
+		toggleDragStart = input.Position
+		toggleStartPos = toggleButton.Position
+		
+		-- Prevent camera movement while interacting with toggle
+		UserInputService.ModalEnabled = true
+		
+		-- Track when input ends
+		if toggleInputConnection then
+			toggleInputConnection:Disconnect()
+		end
+		
+		toggleInputConnection = input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				-- Re-enable camera movement
+				UserInputService.ModalEnabled = false
+				
+				-- Only toggle if we weren't dragging
+				if not isDraggingToggle then
+					if not mainContainer.Visible then
+						playParticleAnimation()
+					else
+						mainContainer.Visible = false
+					end
+				end
+				
+				-- Reset
+				toggleDragStart = nil
+				if toggleInputConnection then
+					toggleInputConnection:Disconnect()
+					toggleInputConnection = nil
+				end
+			end
+		end)
+	end
+end)
+
+toggleButton.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		if toggleDragStart then
+			local delta = input.Position - toggleDragStart
+			
+			-- If moved more than 5 pixels, consider it a drag
+			if delta.Magnitude > 5 then
+				isDraggingToggle = true
+				toggleButton.Position = UDim2.new(
+					toggleStartPos.X.Scale,
+					toggleStartPos.X.Offset + delta.X,
+					toggleStartPos.Y.Scale,
+					toggleStartPos.Y.Offset + delta.Y
+				)
+			end
+		end
+	end
+end)
+
+-- Drag Handle
+local dragHandle = Instance.new("Frame")
+dragHandle.Name = "DragHandle"
+dragHandle.Size = UDim2.new(1, 0, 0, 40)
+dragHandle.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+dragHandle.BorderSizePixel = 0
+dragHandle.Parent = mainContainer
+
+local handleCorner = Instance.new("UICorner")
+handleCorner.CornerRadius = UDim.new(0, 4)
+handleCorner.Parent = dragHandle
+
+local dragIndicator = Instance.new("Frame")
+dragIndicator.Size = UDim2.new(0, 40, 0, 4)
+dragIndicator.Position = UDim2.new(0.5, -20, 0.5, -2)
+dragIndicator.BackgroundColor3 = Color3.fromRGB(80, 80, 90)
+dragIndicator.BorderSizePixel = 0
+dragIndicator.Parent = dragHandle
+
+local indicatorCorner = Instance.new("UICorner")
+indicatorCorner.CornerRadius = UDim.new(1, 0)
+indicatorCorner.Parent = dragIndicator
+
+-- Make container draggable
+local dragging = false
+local dragInput, dragStart, startPos
+local dragInputConnection = nil
+
+dragHandle.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = input.Position
+		startPos = mainContainer.Position
+		
+		-- Prevent camera movement
+		UserInputService.ModalEnabled = true
+		
+		if dragInputConnection then
+			dragInputConnection:Disconnect()
+		end
+		
+		dragInputConnection = input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+				UserInputService.ModalEnabled = false
+				if dragInputConnection then
+					dragInputConnection:Disconnect()
+					dragInputConnection = nil
+				end
+			end
+		end)
+	end
+end)
+
+dragHandle.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		dragInput = input
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if input == dragInput and dragging then
+		local delta = input.Position - dragStart
+		mainContainer.Position = UDim2.new(
+			startPos.X.Scale,
+			startPos.X.Offset + delta.X,
+			startPos.Y.Scale,
+			startPos.Y.Offset + delta.Y
+		)
+	end
+end)
+
+-- Scrolling Frame
+local mainScroll = Instance.new("ScrollingFrame")
+mainScroll.Name = "MainScroll"
+mainScroll.Size = UDim2.new(1, 0, 1, -40)
+mainScroll.Position = UDim2.new(0, 0, 0, 40)
+mainScroll.BackgroundTransparency = 1
+mainScroll.BorderSizePixel = 0
+mainScroll.ScrollBarThickness = 6
+mainScroll.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 100)
+mainScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+mainScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+mainScroll.ScrollingDirection = Enum.ScrollingDirection.Y
+mainScroll.Parent = mainContainer
+
+local padding = Instance.new("UIPadding")
+padding.PaddingTop = UDim.new(0, 12)
+padding.PaddingBottom = UDim.new(0, 12)
+padding.PaddingLeft = UDim.new(0, 12)
+padding.PaddingRight = UDim.new(0, 12)
+padding.Parent = mainScroll
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0, 10)
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Parent = mainScroll
+
+-- Header
+local headerFrame = Instance.new("Frame")
+headerFrame.Name = "Header"
+headerFrame.Size = UDim2.new(1, 0, 0, 55)
+headerFrame.BackgroundTransparency = 1
+headerFrame.LayoutOrder = 1
+headerFrame.Parent = mainScroll
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, 0, 0, 30)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "✨Bling✨"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextSize = 26
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = headerFrame
+
+local subtitleLabel = Instance.new("TextLabel")
+subtitleLabel.Size = UDim2.new(1, 0, 0, 20)
+subtitleLabel.Position = UDim2.new(0, 0, 0, 32)
+subtitleLabel.BackgroundTransparency = 1
+subtitleLabel.Text = "Welcome to ✨Bling✨"
+subtitleLabel.TextColor3 = Color3.fromRGB(150, 150, 160)
+subtitleLabel.TextSize = 13
+subtitleLabel.Font = Enum.Font.Gotham
+subtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+subtitleLabel.Parent = headerFrame
+
+-- Server Panel
+local serverPanel = createRoundedFrame(mainScroll, "ServerPanel", UDim2.new(1, 0, 0, 280), UDim2.new(0, 0, 0, 0), Color3.fromRGB(25, 55, 45), 8)
+serverPanel.LayoutOrder = 2
+addGradient(serverPanel, Color3.fromRGB(20, 50, 40), Color3.fromRGB(35, 65, 55), 135)
+
+local serverPadding = Instance.new("UIPadding")
+serverPadding.PaddingTop = UDim.new(0, 10)
+serverPadding.PaddingBottom = UDim.new(0, 10)
+serverPadding.PaddingLeft = UDim.new(0, 10)
+serverPadding.PaddingRight = UDim.new(0, 10)
+serverPadding.Parent = serverPanel
+
+local serverTitle = Instance.new("TextLabel")
+serverTitle.Size = UDim2.new(1, 0, 0, 18)
+serverTitle.BackgroundTransparency = 1
+serverTitle.Text = "Server & Stats"
+serverTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+serverTitle.TextSize = 16
+serverTitle.Font = Enum.Font.GothamBold
+serverTitle.TextXAlignment = Enum.TextXAlignment.Left
+serverTitle.Parent = serverPanel
+
+-- Stats Container
+local statsContainer = Instance.new("Frame")
+statsContainer.Name = "StatsContainer"
+statsContainer.Size = UDim2.new(1, 0, 1, -25)
+statsContainer.Position = UDim2.new(0, 0, 0, 25)
+statsContainer.BackgroundTransparency = 1
+statsContainer.Parent = serverPanel
+
+local statsGrid = Instance.new("UIGridLayout")
+statsGrid.CellSize = UDim2.new(0.48, 0, 0, 40)
+statsGrid.CellPadding = UDim2.new(0.04, 0, 0, 6)
+statsGrid.SortOrder = Enum.SortOrder.LayoutOrder
+statsGrid.Parent = statsContainer
+
+local function createStatCard(name, title, initialValue, order)
+	local card = createRoundedFrame(statsContainer, name, UDim2.new(0, 0, 0, 0), UDim2.new(0, 0, 0, 0), Color3.fromRGB(20, 20, 25), 6)
+	card.LayoutOrder = order
+	
+	local cardPadding = Instance.new("UIPadding")
+	cardPadding.PaddingTop = UDim.new(0, 5)
+	cardPadding.PaddingLeft = UDim.new(0, 7)
+	cardPadding.PaddingRight = UDim.new(0, 7)
+	cardPadding.Parent = card
+	
+	local titleLbl = Instance.new("TextLabel")
+	titleLbl.Size = UDim2.new(1, 0, 0, 11)
+	titleLbl.BackgroundTransparency = 1
+	titleLbl.Text = title
+	titleLbl.TextColor3 = Color3.fromRGB(160, 160, 170)
+	titleLbl.TextSize = 8
+	titleLbl.Font = Enum.Font.Gotham
+	titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+	titleLbl.TextTruncate = Enum.TextTruncate.AtEnd
+	titleLbl.Parent = card
+	
+	local valueLbl = Instance.new("TextLabel")
+	valueLbl.Name = "ValueLabel"
+	valueLbl.Size = UDim2.new(1, 0, 0, 18)
+	valueLbl.Position = UDim2.new(0, 0, 0, 16)
+	valueLbl.BackgroundTransparency = 1
+	valueLbl.Text = initialValue
+	valueLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+	valueLbl.TextSize = 12
+	valueLbl.Font = Enum.Font.GothamBold
+	valueLbl.TextXAlignment = Enum.TextXAlignment.Left
+	valueLbl.TextTruncate = Enum.TextTruncate.AtEnd
+	valueLbl.Parent = card
+	
+	return card, valueLbl
+end
+
+-- Create stat cards
+local playersCard, playersValue = createStatCard("Players", "Players", "...", 1)
+local maxPlayersCard, maxPlayersValue = createStatCard("MaxPlayers", "Max Players", "...", 2)
+local latencyCard, latencyValue = createStatCard("Latency", "Ping", "...", 3)
+local fpsCard, fpsValue = createStatCard("FPS", "FPS", "...", 4)
+local timeCard, timeValue = createStatCard("InServer", "In Server", "...", 5)
+local friendsPlayingCard, friendsPlayingValue = createStatCard("FriendsPlaying", "Friends Here", "...", 6)
+local friendsTotalCard, friendsTotalValue = createStatCard("FriendsTotal", "Total Friends", "...", 7)
+local friendsOnlineCard, friendsOnlineValue = createStatCard("FriendsOnline", "Friends Online", "...", 8)
+local joinScriptCard, joinScriptValue = createStatCard("JoinScript", "Join Script", "Tap to copy", 9)
+
+-- Make Join Script clickable
+local joinScriptButton = Instance.new("TextButton")
+joinScriptButton.Size = UDim2.new(1, 0, 1, 0)
+joinScriptButton.BackgroundTransparency = 1
+joinScriptButton.Text = ""
+joinScriptButton.Parent = joinScriptCard
+
+joinScriptButton.MouseButton1Click:Connect(function()
+	local jobId = game.JobId
+	local placeId = game.PlaceId
+	local script = string.format('game:GetService("TeleportService"):TeleportToPlaceInstance(%d, "%s", game.Players.LocalPlayer)', placeId, jobId)
+	setclipboard(script)
+	joinScriptValue.Text = "Copied!"
+	task.wait(2)
+	joinScriptValue.Text = "Tap to copy"
+end)
+
+-- Update Functions
+local joinTime = tick()
+
+local function updateStats()
+	-- Players
+	local playerCount = #Players:GetPlayers()
+	playersValue.Text = playerCount .. " playing"
+	
+	-- Max Players
+	maxPlayersValue.Text = Players.MaxPlayers .. " max"
+	
+	-- Latency (Ping)
+	local ping = Stats.PerformanceStats.Ping:GetValue()
+	latencyValue.Text = math.floor(ping) .. "ms"
+	
+	-- FPS
+	local fps = math.floor(1 / RunService.RenderStepped:Wait())
+	fpsValue.Text = fps .. " fps"
+	
+	-- Time in server
+	local timeInServer = math.floor(tick() - joinTime)
+	local minutes = math.floor(timeInServer / 60)
+	local seconds = timeInServer % 60
+	if minutes > 0 then
+		timeValue.Text = minutes .. "m " .. seconds .. "s"
+	else
+		timeValue.Text = seconds .. " seconds"
+	end
+	
+	-- Friends
+	local friendsInServer = 0
+	local friendsList = player:GetFriendsOnline(200)
+	
+	for _, friend in pairs(friendsList) do
+		if friend.PlaceId == game.PlaceId then
+			friendsInServer = friendsInServer + 1
+		end
+	end
+	
+	friendsPlayingValue.Text = friendsInServer .. " here"
+	friendsTotalValue.Text = #player:GetFriendsOnline(200) .. " friends"
+	
+	-- Count online friends
+	local onlineCount = 0
+	for _, friend in pairs(friendsList) do
+		if friend.IsOnline then
+			onlineCount = onlineCount + 1
+		end
+	end
+	friendsOnlineValue.Text = onlineCount .. " online"
+end
+
+-- Update stats every second
+RunService.Heartbeat:Connect(function()
+	updateStats()
+end)
+
+-- Initial update
+updateStats()
+
+-- Display Name Panel
+local displayPanel = createRoundedFrame(mainScroll, "DisplayPanel", UDim2.new(1, 0, 0, 55), UDim2.new(0, 0, 0, 0), Color3.fromRGB(30, 65, 80), 8)
+displayPanel.LayoutOrder = 3
+addGradient(displayPanel, Color3.fromRGB(25, 60, 75), Color3.fromRGB(40, 75, 90), 120)
+
+local displayPadding = Instance.new("UIPadding")
+displayPadding.PaddingTop = UDim.new(0, 10)
+displayPadding.PaddingLeft = UDim.new(0, 10)
+displayPadding.PaddingRight = UDim.new(0, 10)
+displayPadding.Parent = displayPanel
+
+local avatarIcon = Instance.new("ImageLabel")
+avatarIcon.Size = UDim2.new(0, 36, 0, 36)
+avatarIcon.Position = UDim2.new(0, 0, 0, 0)
+avatarIcon.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+avatarIcon.BorderSizePixel = 0
+avatarIcon.Image = "rbxthumb://type=AvatarHeadShot&id="..player.UserId.."&w=150&h=150"
+avatarIcon.Parent = displayPanel
+
+local avatarCorner = Instance.new("UICorner")
+avatarCorner.CornerRadius = UDim.new(1, 0)
+avatarCorner.Parent = avatarIcon
+
+local displayName = Instance.new("TextLabel")
+displayName.Size = UDim2.new(1, -45, 0, 18)
+displayName.Position = UDim2.new(0, 43, 0, 3)
+displayName.BackgroundTransparency = 1
+displayName.Text = player.DisplayName
+displayName.TextColor3 = Color3.fromRGB(255, 255, 255)
+displayName.TextSize = 15
+displayName.Font = Enum.Font.GothamBold
+displayName.TextXAlignment = Enum.TextXAlignment.Left
+displayName.Parent = displayPanel
+
+local username = Instance.new("TextLabel")
+username.Size = UDim2.new(1, -45, 0, 14)
+username.Position = UDim2.new(0, 43, 0, 22)
+username.BackgroundTransparency = 1
+username.Text = "@"..player.Name
+username.TextColor3 = Color3.fromRGB(170, 200, 210)
+username.TextSize = 11
+username.Font = Enum.Font.Gotham
+username.TextXAlignment = Enum.TextXAlignment.Left
+username.Parent = displayPanel
+
+-- Bottom Buttons
+local buttonsContainer = Instance.new("Frame")
+buttonsContainer.Name = "Buttons"
+buttonsContainer.Size = UDim2.new(1, 0, 0, 55)
+buttonsContainer.BackgroundTransparency = 1
+buttonsContainer.LayoutOrder = 4
+buttonsContainer.Parent = mainScroll
+
+local buttonsGrid = Instance.new("UIGridLayout")
+buttonsGrid.CellSize = UDim2.new(0.48, 0, 1, 0)
+buttonsGrid.CellPadding = UDim2.new(0.04, 0, 0, 0)
+buttonsGrid.SortOrder = Enum.SortOrder.LayoutOrder
+buttonsGrid.Parent = buttonsContainer
+
+local mainTabButton = createRoundedFrame(buttonsContainer, "MainTab", UDim2.new(0, 0, 0, 0), UDim2.new(0, 0, 0, 0), Color3.fromRGB(75, 30, 30), 8)
+mainTabButton.LayoutOrder = 1
+addGradient(mainTabButton, Color3.fromRGB(70, 25, 25), Color3.fromRGB(85, 35, 35), 100)
+
+local mainTabPadding = Instance.new("UIPadding")
+mainTabPadding.PaddingTop = UDim.new(0, 8)
+mainTabPadding.PaddingLeft = UDim.new(0, 10)
+mainTabPadding.Parent = mainTabButton
+
+local mainTabTitle = Instance.new("TextLabel")
+mainTabTitle.Size = UDim2.new(1, 0, 0, 20)
+mainTabTitle.BackgroundTransparency = 1
+mainTabTitle.Text = "Main Tab"
+mainTabTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+mainTabTitle.TextSize = 15
+mainTabTitle.Font = Enum.Font.GothamBold
+mainTabTitle.TextXAlignment = Enum.TextXAlignment.Left
+mainTabTitle.Parent = mainTabButton
+
+local mainTabDesc = Instance.new("TextLabel")
+mainTabDesc.Size = UDim2.new(1, 0, 0, 14)
+mainTabDesc.Position = UDim2.new(0, 0, 0, 22)
+mainTabDesc.BackgroundTransparency = 1
+mainTabDesc.Text = "Open main menu"
+mainTabDesc.TextColor3 = Color3.fromRGB(200, 160, 160)
+mainTabDesc.TextSize = 10
+mainTabDesc.Font = Enum.Font.Gotham
+mainTabDesc.TextXAlignment = Enum.TextXAlignment.Left
+mainTabDesc.Parent = mainTabButton
+
+local automaticsButton = createRoundedFrame(buttonsContainer, "Automatics", UDim2.new(0, 0, 0, 0), UDim2.new(0, 0, 0, 0), Color3.fromRGB(50, 50, 115), 8)
+automaticsButton.LayoutOrder = 2
+addGradient(automaticsButton, Color3.fromRGB(45, 45, 110), Color3.fromRGB(60, 60, 125), 110)
+
+local automaticsPadding = Instance.new("UIPadding")
+automaticsPadding.PaddingTop = UDim.new(0, 8)
+automaticsPadding.PaddingLeft = UDim.new(0, 10)
+automaticsPadding.Parent = automaticsButton
+
+local automaticsTitle = Instance.new("TextLabel")
+automaticsTitle.Size = UDim2.new(1, 0, 0, 20)
+automaticsTitle.BackgroundTransparency = 1
+automaticsTitle.Text = "Automatic's"
+automaticsTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+automaticsTitle.TextSize = 15
+automaticsTitle.Font = Enum.Font.GothamBold
+automaticsTitle.TextXAlignment = Enum.TextXAlignment.Left
+automaticsTitle.Parent = automaticsButton
+
+local automaticsDesc = Instance.new("TextLabel")
+automaticsDesc.Size = UDim2.new(1, 0, 0, 14)
+automaticsDesc.Position = UDim2.new(0, 0, 0, 22)
+automaticsDesc.BackgroundTransparency = 1
+automaticsDesc.Text = "Auto features"
+automaticsDesc.TextColor3 = Color3.fromRGB(190, 190, 220)
+automaticsDesc.TextSize = 10
+automaticsDesc.Font = Enum.Font.Gotham
+automaticsDesc.TextXAlignment = Enum.TextXAlignment.Left
+automaticsDesc.Parent = automaticsButton
