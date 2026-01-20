@@ -1,34 +1,43 @@
--- LocalScript
-local Players = game:GetService("Players")
+local player = game.Players.LocalPlayer
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
-local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
+local RunService = game:GetService("RunService")
 
--- Create ScreenGui
+-- Variables
+local addedObjects = {}
+local selectedObject = nil
+local currentMode = "Select"
+local currentEasingStyle = Enum.EasingStyle.Linear
+local keyframes = {}
+local moveSpheres = {}
+local resizeSpheres = {}
+local isPlaying = false
+local activeButton = nil
+local activeSmoothsButton = nil
+local smoothsExpanded = false
+
+-- UI Creation
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "EditorUI"
+screenGui.Name = "ObjectEditor"
 screenGui.ResetOnSpawn = false
-screenGui.Parent = playerGui
+screenGui.Parent = player:WaitForChild("PlayerGui")
 
--- Create main frame (draggable container)
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 200, 0, 300)
-mainFrame.Position = UDim2.new(0, 10, 0.5, -150)
-mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+mainFrame.Size = UDim2.new(0, 400, 0, 60)
+mainFrame.Position = UDim2.new(0.5, -200, 0, 20)
+mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 mainFrame.BorderSizePixel = 0
 mainFrame.Parent = screenGui
 
-local mainCorner = Instance.new("UICorner")
-mainCorner.CornerRadius = UDim.new(0, 8)
-mainCorner.Parent = mainFrame
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = mainFrame
 
--- Create title bar for dragging
 local titleBar = Instance.new("Frame")
 titleBar.Name = "TitleBar"
 titleBar.Size = UDim2.new(1, 0, 0, 25)
-titleBar.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+titleBar.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
 titleBar.BorderSizePixel = 0
 titleBar.Parent = mainFrame
 
@@ -38,127 +47,428 @@ titleCorner.Parent = titleBar
 
 local titleLabel = Instance.new("TextLabel")
 titleLabel.Size = UDim2.new(1, -10, 1, 0)
-titleLabel.Position = UDim2.new(0, 5, 0, 0)
+titleLabel.Position = UDim2.new(0, 10, 0, 0)
 titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "Editor Tools"
+titleLabel.Text = "Object Editor"
 titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-titleLabel.TextSize = 12
+titleLabel.TextSize = 14
 titleLabel.Font = Enum.Font.GothamBold
 titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 titleLabel.Parent = titleBar
 
--- Create scrolling frame
-local scrollFrame = Instance.new("ScrollingFrame")
-scrollFrame.Name = "ScrollFrame"
-scrollFrame.Size = UDim2.new(1, -10, 1, -32)
-scrollFrame.Position = UDim2.new(0, 5, 0, 27)
-scrollFrame.BackgroundTransparency = 1
-scrollFrame.BorderSizePixel = 0
-scrollFrame.ScrollBarThickness = 4
-scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 105)
-scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-scrollFrame.Parent = mainFrame
+local contentFrame = Instance.new("Frame")
+contentFrame.Name = "ContentFrame"
+contentFrame.Size = UDim2.new(1, -10, 1, -30)
+contentFrame.Position = UDim2.new(0, 5, 0, 27)
+contentFrame.BackgroundTransparency = 1
+contentFrame.Parent = mainFrame
 
-local listLayout = Instance.new("UIListLayout")
-listLayout.Padding = UDim.new(0, 4)
-listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-listLayout.Parent = scrollFrame
+local buttonContainer = Instance.new("Frame")
+buttonContainer.Name = "ButtonContainer"
+buttonContainer.Size = UDim2.new(1, 0, 0, 28)
+buttonContainer.BackgroundTransparency = 1
+buttonContainer.Parent = contentFrame
 
--- State variables
-local currentMode = nil
-local addedObjects = {}
-local selectedObject = nil
-local moveSpheres = {}
-local resizeSpheres = {}
-local keyframes = {}
-local currentEasingStyle = Enum.EasingStyle.Linear
-local isPlaying = false
+local buttonLayout = Instance.new("UIListLayout")
+buttonLayout.FillDirection = Enum.FillDirection.Horizontal
+buttonLayout.Padding = UDim.new(0, 3)
+buttonLayout.SortOrder = Enum.SortOrder.LayoutOrder
+buttonLayout.Parent = buttonContainer
 
--- Materials list
-local materials = {
-    "Plastic", "Wood", "Slate", "Concrete", "CorrodedMetal",
-    "DiamondPlate", "Foil", "Grass", "Ice", "Marble",
-    "Granite", "Brick", "Pebble", "Sand", "Fabric",
-    "SmoothPlastic", "Metal", "WoodPlanks", "Cobblestone",
-    "Neon", "Glass", "ForceField"
-}
+-- Color Picker Frame
+local colorFrame = Instance.new("Frame")
+colorFrame.Name = "ColorFrame"
+colorFrame.Size = UDim2.new(0, 250, 0, 200)
+colorFrame.Position = UDim2.new(0, 0, 0, 65)
+colorFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+colorFrame.BorderSizePixel = 0
+colorFrame.Visible = false
+colorFrame.Parent = mainFrame
 
--- Button configuration
-local buttons = {
-    {name = "Select", color = Color3.fromRGB(52, 152, 219)},
-    {name = "Add", color = Color3.fromRGB(46, 204, 113)},
-    {name = "Remove", color = Color3.fromRGB(231, 76, 60)},
-    {name = "Move", color = Color3.fromRGB(155, 89, 182)},
-    {name = "Resize", color = Color3.fromRGB(241, 196, 15)},
-    {name = "Materials", color = Color3.fromRGB(230, 126, 34)},
-    {name = "Color", color = Color3.fromRGB(26, 188, 156)},
-    {name = "Keyframes", color = Color3.fromRGB(52, 73, 94)},
-    {name = "Smooths", color = Color3.fromRGB(149, 165, 166), hasSubmenu = true}
-}
+local colorCorner = Instance.new("UICorner")
+colorCorner.CornerRadius = UDim.new(0, 8)
+colorCorner.Parent = colorFrame
 
-local smoothsSubmenu = {
-    {name = "Instant", color = Color3.fromRGB(80, 100, 120), style = nil},
-    {name = "Linear", color = Color3.fromRGB(100, 120, 140), style = Enum.EasingStyle.Linear},
-    {name = "Cubic", color = Color3.fromRGB(120, 140, 160), style = Enum.EasingStyle.Quad},
-    {name = "Elastic", color = Color3.fromRGB(140, 160, 180), style = Enum.EasingStyle.Elastic}
-}
+local hueSlider = Instance.new("Frame")
+hueSlider.Size = UDim2.new(0.9, 0, 0, 20)
+hueSlider.Position = UDim2.new(0.05, 0, 0, 10)
+hueSlider.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+hueSlider.BorderSizePixel = 0
+hueSlider.Parent = colorFrame
 
-local activeButton = nil
-local smoothsExpanded = false
-local activeSmoothsButton = nil
-local buttonObjects = {}
-local smoothsContainer = nil
+local hueGradient = Instance.new("UIGradient")
+hueGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+    ColorSequenceKeypoint.new(0.17, Color3.fromRGB(255, 255, 0)),
+    ColorSequenceKeypoint.new(0.33, Color3.fromRGB(0, 255, 0)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 255, 255)),
+    ColorSequenceKeypoint.new(0.67, Color3.fromRGB(0, 0, 255)),
+    ColorSequenceKeypoint.new(0.83, Color3.fromRGB(255, 0, 255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0))
+})
+hueGradient.Parent = hueSlider
 
--- Helper: Create toggle button
-local function createToggleButton(config, parent, isSmoothsChild)
-    local button = Instance.new("TextButton")
-    button.Name = config.name
-    button.Size = UDim2.new(1, isSmoothsChild and -20 or 0, 0, 28)
-    button.Position = isSmoothsChild and UDim2.new(0, 15, 0, 0) or UDim2.new(0, 0, 0, 0)
-    button.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-    button.BorderSizePixel = 0
-    button.Text = config.name
-    button.TextColor3 = Color3.fromRGB(200, 200, 200)
-    button.TextSize = 11
-    button.Font = Enum.Font.Gotham
-    button.AutoButtonColor = false
-    button.Parent = parent
-    
-    local buttonCorner = Instance.new("UICorner")
-    buttonCorner.CornerRadius = UDim.new(0, 5)
-    buttonCorner.Parent = button
-    
-    local highlight = Instance.new("Frame")
-    highlight.Name = "Highlight"
-    highlight.Size = UDim2.new(0, 3, 1, -4)
-    highlight.Position = UDim2.new(0, 2, 0, 2)
-    highlight.BackgroundColor3 = config.color
-    highlight.BorderSizePixel = 0
-    highlight.Visible = false
-    highlight.Parent = button
-    
-    local highlightCorner = Instance.new("UICorner")
-    highlightCorner.CornerRadius = UDim.new(0, 2)
-    highlightCorner.Parent = highlight
-    
-    return button, highlight
+local saturationBrightness = Instance.new("Frame")
+saturationBrightness.Size = UDim2.new(0.9, 0, 0, 120)
+saturationBrightness.Position = UDim2.new(0.05, 0, 0, 40)
+saturationBrightness.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+saturationBrightness.BorderSizePixel = 0
+saturationBrightness.Parent = colorFrame
+
+local satGradient = Instance.new("UIGradient")
+satGradient.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 0, 0))
+satGradient.Parent = saturationBrightness
+
+local brightFrame = Instance.new("Frame")
+brightFrame.Size = UDim2.new(1, 0, 1, 0)
+brightFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+brightFrame.BackgroundTransparency = 0
+brightFrame.BorderSizePixel = 0
+brightFrame.Parent = saturationBrightness
+
+local brightGradient = Instance.new("UIGradient")
+brightGradient.Transparency = NumberSequence.new({
+    NumberSequenceKeypoint.new(0, 0),
+    NumberSequenceKeypoint.new(1, 1)
+})
+brightGradient.Rotation = 90
+brightGradient.Parent = brightFrame
+
+local currentHue = 0
+local currentSat = 1
+local currentBright = 1
+
+local function HSVToRGB(h, s, v)
+    local c = v * s
+    local x = c * (1 - math.abs((h / 60) % 2 - 1))
+    local m = v - c
+    local r, g, b
+    if h < 60 then r, g, b = c, x, 0
+    elseif h < 120 then r, g, b = x, c, 0
+    elseif h < 180 then r, g, b = 0, c, x
+    elseif h < 240 then r, g, b = 0, x, c
+    elseif h < 300 then r, g, b = x, 0, c
+    else r, g, b = c, 0, x end
+    return Color3.fromRGB((r + m) * 255, (g + m) * 255, (b + m) * 255)
 end
 
--- Helper: Clear selection spheres
+hueSlider.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        local function update()
+            local mousePos = input.Position.X
+            local relativePos = math.clamp((mousePos - hueSlider.AbsolutePosition.X) / hueSlider.AbsoluteSize.X, 0, 1)
+            currentHue = relativePos * 360
+            local baseColor = HSVToRGB(currentHue, 1, 1)
+            saturationBrightness.BackgroundColor3 = baseColor
+            satGradient.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), baseColor)
+            if selectedObject then
+                selectedObject.Color = HSVToRGB(currentHue, currentSat, currentBright)
+            end
+        end
+        update()
+        local connection
+        connection = input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                connection:Disconnect()
+            end
+        end)
+    end
+end)
+
+saturationBrightness.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        local function update()
+            local mouseX = input.Position.X
+            local mouseY = input.Position.Y
+            local relativeX = math.clamp((mouseX - saturationBrightness.AbsolutePosition.X) / saturationBrightness.AbsoluteSize.X, 0, 1)
+            local relativeY = math.clamp((mouseY - saturationBrightness.AbsolutePosition.Y) / saturationBrightness.AbsoluteSize.Y, 0, 1)
+            currentSat = relativeX
+            currentBright = 1 - relativeY
+            if selectedObject then
+                selectedObject.Color = HSVToRGB(currentHue, currentSat, currentBright)
+            end
+        end
+        update()
+        local connection
+        connection = input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                connection:Disconnect()
+            end
+        end)
+    end
+end)
+
+-- Material Frame
+local materialFrame = Instance.new("ScrollingFrame")
+materialFrame.Name = "MaterialFrame"
+materialFrame.Size = UDim2.new(0, 200, 0, 150)
+materialFrame.Position = UDim2.new(0, 0, 0, 65)
+materialFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+materialFrame.BorderSizePixel = 0
+materialFrame.Visible = false
+materialFrame.ScrollBarThickness = 6
+materialFrame.Parent = mainFrame
+
+local matCorner = Instance.new("UICorner")
+matCorner.CornerRadius = UDim.new(0, 8)
+matCorner.Parent = materialFrame
+
+local matLayout = Instance.new("UIListLayout")
+matLayout.Padding = UDim.new(0, 2)
+matLayout.SortOrder = Enum.SortOrder.LayoutOrder
+matLayout.Parent = materialFrame
+
+local materials = {"Grass", "Cobblestone", "Neon", "Glass", "Sand", "Plastic", "Wood", "Metal", "Concrete", "Brick"}
+
+for i, mat in ipairs(materials) do
+    local matButton = Instance.new("TextButton")
+    matButton.Size = UDim2.new(1, -10, 0, 25)
+    matButton.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+    matButton.BorderSizePixel = 0
+    matButton.Text = mat
+    matButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    matButton.TextSize = 12
+    matButton.Font = Enum.Font.Gotham
+    matButton.Parent = materialFrame
+    
+    local matCorner2 = Instance.new("UICorner")
+    matCorner2.CornerRadius = UDim.new(0, 4)
+    matCorner2.Parent = matButton
+    
+    matButton.MouseButton1Click:Connect(function()
+        if selectedObject then
+            selectedObject.Material = Enum.Material[mat]
+        end
+    end)
+end
+
+matLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    materialFrame.CanvasSize = UDim2.new(0, 0, 0, matLayout.AbsoluteContentSize.Y + 5)
+end)
+
+-- Keyframe Frame
+local keyframeFrame = Instance.new("Frame")
+keyframeFrame.Name = "KeyframeFrame"
+keyframeFrame.Size = UDim2.new(0, 600, 0, 200)
+keyframeFrame.Position = UDim2.new(0, 0, 0, 65)
+keyframeFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+keyframeFrame.BorderSizePixel = 0
+keyframeFrame.Visible = false
+keyframeFrame.Parent = mainFrame
+
+local kfCorner = Instance.new("UICorner")
+kfCorner.CornerRadius = UDim.new(0, 8)
+kfCorner.Parent = keyframeFrame
+
+local objectListFrame = Instance.new("ScrollingFrame")
+objectListFrame.Size = UDim2.new(0, 150, 1, -40)
+objectListFrame.Position = UDim2.new(0, 5, 0, 5)
+objectListFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+objectListFrame.BorderSizePixel = 0
+objectListFrame.ScrollBarThickness = 4
+objectListFrame.Parent = keyframeFrame
+
+local objLayout = Instance.new("UIListLayout")
+objLayout.Padding = UDim.new(0, 2)
+objLayout.SortOrder = Enum.SortOrder.LayoutOrder
+objLayout.Parent = objectListFrame
+
+local timelineFrame = Instance.new("ScrollingFrame")
+timelineFrame.Size = UDim2.new(1, -165, 1, -40)
+timelineFrame.Position = UDim2.new(0, 160, 0, 5)
+timelineFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+timelineFrame.BorderSizePixel = 0
+timelineFrame.ScrollBarThickness = 4
+timelineFrame.CanvasSize = UDim2.new(5, 0, 0, 0)
+timelineFrame.Parent = keyframeFrame
+
+local playButton = Instance.new("TextButton")
+playButton.Size = UDim2.new(0, 80, 0, 30)
+playButton.Position = UDim2.new(0, 5, 1, -35)
+playButton.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+playButton.Text = "Play"
+playButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+playButton.TextSize = 12
+playButton.Font = Enum.Font.GothamBold
+playButton.Parent = keyframeFrame
+
+local playCorner = Instance.new("UICorner")
+playCorner.CornerRadius = UDim.new(0, 4)
+playCorner.Parent = playButton
+
+local selectedKFObject = nil
+
+local function updateKeyframeDisplay()
+    for _, child in ipairs(objectListFrame:GetChildren()) do
+        if child:IsA("Frame") then
+            child:Destroy()
+        end
+    end
+    for _, child in ipairs(timelineFrame:GetChildren()) do
+        if child:IsA("Frame") then
+            child:Destroy()
+        end
+    end
+    
+    for i, obj in ipairs(addedObjects) do
+        local objFrame = Instance.new("Frame")
+        objFrame.Size = UDim2.new(1, -5, 0, 30)
+        objFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+        objFrame.BorderSizePixel = 0
+        objFrame.Parent = objectListFrame
+        
+        local objLabel = Instance.new("TextLabel")
+        objLabel.Size = UDim2.new(1, -50, 1, 0)
+        objLabel.BackgroundTransparency = 1
+        objLabel.Text = "Object " .. i
+        objLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        objLabel.TextSize = 11
+        objLabel.Font = Enum.Font.Gotham
+        objLabel.TextXAlignment = Enum.TextXAlignment.Left
+        objLabel.Parent = objFrame
+        
+        local addKFBtn = Instance.new("TextButton")
+        addKFBtn.Size = UDim2.new(0, 20, 0, 20)
+        addKFBtn.Position = UDim2.new(1, -45, 0.5, -10)
+        addKFBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 60)
+        addKFBtn.Text = "+"
+        addKFBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        addKFBtn.TextSize = 14
+        addKFBtn.Font = Enum.Font.GothamBold
+        addKFBtn.Parent = objFrame
+        
+        local removeKFBtn = Instance.new("TextButton")
+        removeKFBtn.Size = UDim2.new(0, 20, 0, 20)
+        removeKFBtn.Position = UDim2.new(1, -22, 0.5, -10)
+        removeKFBtn.BackgroundColor3 = Color3.fromRGB(180, 60, 60)
+        removeKFBtn.Text = "-"
+        removeKFBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        removeKFBtn.TextSize = 14
+        removeKFBtn.Font = Enum.Font.GothamBold
+        removeKFBtn.Parent = objFrame
+        
+        local timelineLine = Instance.new("Frame")
+        timelineLine.Size = UDim2.new(1, 0, 0, 30)
+        timelineLine.Position = UDim2.new(0, 0, 0, (i - 1) * 32)
+        timelineLine.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+        timelineLine.BorderSizePixel = 0
+        timelineLine.Parent = timelineFrame
+        
+        local separator = Instance.new("Frame")
+        separator.Size = UDim2.new(1, 0, 0, 1)
+        separator.Position = UDim2.new(0, 0, 1, 0)
+        separator.BackgroundColor3 = Color3.fromRGB(60, 60, 65)
+        separator.BorderSizePixel = 0
+        separator.Parent = timelineLine
+        
+        if not keyframes[obj] then
+            keyframes[obj] = {}
+        end
+        
+        for time, kfData in pairs(keyframes[obj]) do
+            local kfMarker = Instance.new("Frame")
+            kfMarker.Size = UDim2.new(0, 10, 0, 10)
+            kfMarker.Position = UDim2.new(time / 10, -5, 0.5, -5)
+            kfMarker.BackgroundColor3 = Color3.fromRGB(100, 200, 255)
+            kfMarker.BorderSizePixel = 0
+            kfMarker.Parent = timelineLine
+            
+            local kfCorner3 = Instance.new("UICorner")
+            kfCorner3.CornerRadius = UDim.new(1, 0)
+            kfCorner3.Parent = kfMarker
+        end
+        
+        objFrame.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                selectedKFObject = obj
+            end
+        end)
+        
+        addKFBtn.MouseButton1Click:Connect(function()
+            if selectedKFObject == obj then
+                local currentTime = tick() % 10
+                keyframes[obj][currentTime] = {
+                    Position = obj.Position,
+                    Size = obj.Size,
+                    Color = obj.Color,
+                    Material = obj.Material
+                }
+                updateKeyframeDisplay()
+            end
+        end)
+        
+        removeKFBtn.MouseButton1Click:Connect(function()
+            if selectedKFObject == obj and keyframes[obj] then
+                local closestTime = nil
+                local minDist = math.huge
+                local currentTime = tick() % 10
+                for time, _ in pairs(keyframes[obj]) do
+                    local dist = math.abs(time - currentTime)
+                    if dist < minDist then
+                        minDist = dist
+                        closestTime = time
+                    end
+                end
+                if closestTime then
+                    keyframes[obj][closestTime] = nil
+                    updateKeyframeDisplay()
+                end
+            end
+        end)
+    end
+    
+    objLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        objectListFrame.CanvasSize = UDim2.new(0, 0, 0, objLayout.AbsoluteContentSize.Y + 5)
+    end)
+end
+
+playButton.MouseButton1Click:Connect(function()
+    isPlaying = not isPlaying
+    playButton.Text = isPlaying and "Stop" or "Play"
+    
+    if isPlaying then
+        for obj, kfs in pairs(keyframes) do
+            local sortedTimes = {}
+            for time, _ in pairs(kfs) do
+                table.insert(sortedTimes, time)
+            end
+            table.sort(sortedTimes)
+            
+            for i = 1, #sortedTimes - 1 do
+                local startTime = sortedTimes[i]
+                local endTime = sortedTimes[i + 1]
+                local duration = endTime - startTime
+                
+                local tweenInfo = TweenInfo.new(duration, currentEasingStyle, Enum.EasingDirection.InOut)
+                local tween = TweenService:Create(obj, tweenInfo, {
+                    Position = kfs[endTime].Position,
+                    Size = kfs[endTime].Size,
+                    Color = kfs[endTime].Color
+                })
+                
+                task.wait(startTime)
+                tween:Play()
+                tween.Completed:Wait()
+            end
+        end
+        isPlaying = false
+        playButton.Text = "Play"
+    end
+end)
+
+-- Sphere functions
 local function clearSpheres()
-    for _, sphere in pairs(moveSpheres) do
+    for _, sphere in ipairs(moveSpheres) do
         sphere:Destroy()
     end
-    for _, sphere in pairs(resizeSpheres) do
+    for _, sphere in ipairs(resizeSpheres) do
         sphere:Destroy()
     end
     moveSpheres = {}
     resizeSpheres = {}
 end
 
--- Helper: Create move spheres
-local function createMoveSpheres(part)
+local function createMoveSpheres(obj)
     clearSpheres()
     local positions = {
         Vector3.new(1, 0, 0), Vector3.new(-1, 0, 0),
@@ -166,349 +476,181 @@ local function createMoveSpheres(part)
         Vector3.new(0, 0, 1), Vector3.new(0, 0, -1)
     }
     
-    for _, offset in pairs(positions) do
+    for _, offset in ipairs(positions) do
         local sphere = Instance.new("Part")
         sphere.Shape = Enum.PartType.Ball
-        sphere.Size = Vector3.new(1, 1, 1)
-        sphere.BrickColor = BrickColor.new("Bright blue")
+        sphere.Size = Vector3.new(0.5, 0.5, 0.5)
+        sphere.Color = Color3.fromRGB(100, 200, 255)
         sphere.Material = Enum.Material.Neon
         sphere.Anchored = true
         sphere.CanCollide = false
-        sphere.TopSurface = Enum.SurfaceType.Smooth
-        sphere.BottomSurface = Enum.SurfaceType.Smooth
         sphere.Parent = workspace
         
-        local clickDetector = Instance.new("ClickDetector")
-        clickDetector.Parent = sphere
+        local function updatePos()
+            sphere.Position = obj.Position + (offset * (obj.Size / 2)) + (offset * 0.5)
+        end
+        updatePos()
         
         table.insert(moveSpheres, sphere)
         
-        -- Update sphere position
-        local function updatePos()
-            if part and part.Parent then
-                sphere.Position = part.Position + (offset * (part.Size / 2 + Vector3.new(0.5, 0.5, 0.5)))
-            end
-        end
-        updatePos()
+        local clickDetector = Instance.new("ClickDetector")
+        clickDetector.Parent = sphere
         
-        -- Dragging logic
+        local dragging = false
         clickDetector.MouseClick:Connect(function()
-            local mouse = player:GetMouse()
-            local dragging = true
-            
-            local conn
-            conn = mouse.Move:Connect(function()
-                if dragging and part and part.Parent then
-                    part.Position = mouse.Hit.Position
-                    for _, s in pairs(moveSpheres) do
-                        local off = positions[table.find(moveSpheres, s)]
-                        s.Position = part.Position + (off * (part.Size / 2 + Vector3.new(0.5, 0.5, 0.5)))
+            dragging = not dragging
+            if dragging then
+                sphere.Color = Color3.fromRGB(255, 255, 100)
+                local connection
+                connection = RunService.RenderStepped:Connect(function()
+                    if not dragging then
+                        connection:Disconnect()
+                        sphere.Color = Color3.fromRGB(100, 200, 255)
+                        return
                     end
-                end
-            end)
-            
-            local upConn
-            upConn = mouse.Button1Up:Connect(function()
-                dragging = false
-                conn:Disconnect()
-                upConn:Disconnect()
-            end)
+                    local mouse = player:GetMouse()
+                    local ray = Ray.new(mouse.UnitRay.Origin, mouse.UnitRay.Direction * 1000)
+                    local hit, pos = workspace:FindPartOnRay(ray, player.Character)
+                    if offset.X ~= 0 then
+                        obj.Position = Vector3.new(pos.X, obj.Position.Y, obj.Position.Z)
+                    elseif offset.Y ~= 0 then
+                        obj.Position = Vector3.new(obj.Position.X, pos.Y, obj.Position.Z)
+                    else
+                        obj.Position = Vector3.new(obj.Position.X, obj.Position.Y, pos.Z)
+                    end
+                    updatePos()
+                end)
+            end
         end)
+        
+        RunService.RenderStepped:Connect(updatePos)
     end
 end
 
--- Helper: Create resize spheres
-local function createResizeSpheres(part)
+local function createResizeSpheres(obj)
     clearSpheres()
-    local corners = {
-        Vector3.new(1, 1, 1), Vector3.new(-1, 1, 1),
-        Vector3.new(1, -1, 1), Vector3.new(-1, -1, 1),
-        Vector3.new(1, 1, -1), Vector3.new(-1, 1, -1),
-        Vector3.new(1, -1, -1), Vector3.new(-1, -1, -1)
-    }
-    
-    for _, corner in pairs(corners) do
-        local sphere = Instance.new("Part")
-        sphere.Shape = Enum.PartType.Ball
-        sphere.Size = Vector3.new(0.8, 0.8, 0.8)
-        sphere.BrickColor = BrickColor.new("Bright yellow")
-        sphere.Material = Enum.Material.Neon
-        sphere.Anchored = true
-        sphere.CanCollide = false
-        sphere.Parent = workspace
+-- Continue from where you left off (after createResizeSpheres function start)
+
+        local function updatePos()
+            sphere.Position = obj.Position + (offset * (obj.Size / 2))
+        end
+        updatePos()
+        
+        table.insert(resizeSpheres, sphere)
         
         local clickDetector = Instance.new("ClickDetector")
         clickDetector.Parent = sphere
         
-        table.insert(resizeSpheres, sphere)
-        
-        local function updatePos()
-            if part and part.Parent then
-                sphere.Position = part.Position + (corner * part.Size / 2)
-            end
-        end
-        updatePos()
-    end
-end
-
--- Color picker frame
-local colorFrame = Instance.new("Frame")
-colorFrame.Name = "ColorPicker"
-colorFrame.Size = UDim2.new(0, 250, 0, 200)
-colorFrame.Position = UDim2.new(0, 220, 0.5, -100)
-colorFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-colorFrame.BorderSizePixel = 0
-colorFrame.Visible = false
-colorFrame.Parent = screenGui
-
-local colorCorner = Instance.new("UICorner")
-colorCorner.CornerRadius = UDim.new(0, 8)
-colorCorner.Parent = colorFrame
-
-local colorScroll = Instance.new("ScrollingFrame")
-colorScroll.Size = UDim2.new(1, -10, 1, -10)
-colorScroll.Position = UDim2.new(0, 5, 0, 5)
-colorScroll.BackgroundTransparency = 1
-colorScroll.ScrollBarThickness = 4
-colorScroll.Parent = colorFrame
-
-local colorGrid = Instance.new("UIGridLayout")
-colorGrid.CellSize = UDim2.new(0, 30, 0, 30)
-colorGrid.CellPadding = UDim2.new(0, 5, 0, 5)
-colorGrid.Parent = colorScroll
-
--- Generate color palette
-for h = 0, 360, 30 do
-    for s = 0.5, 1, 0.5 do
-        for v = 0.5, 1, 0.5 do
-            local colorBtn = Instance.new("TextButton")
-            colorBtn.Size = UDim2.new(1, 0, 1, 0)
-            colorBtn.BackgroundColor3 = Color3.fromHSV(h/360, s, v)
-            colorBtn.Text = ""
-            colorBtn.Parent = colorScroll
-            
-            local cCorner = Instance.new("UICorner")
-            cCorner.CornerRadius = UDim.new(0, 4)
-            cCorner.Parent = colorBtn
-            
-            colorBtn.MouseButton1Click:Connect(function()
-                if selectedObject then
-                    selectedObject.Color = Color3.fromHSV(h/360, s, v)
-                end
-            end)
-        end
-    end
-end
-
--- Material picker frame
-local materialFrame = Instance.new("Frame")
-materialFrame.Name = "MaterialPicker"
-materialFrame.Size = UDim2.new(0, 220, 0, 250)
-materialFrame.Position = UDim2.new(0, 220, 0.5, -125)
-materialFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-materialFrame.BorderSizePixel = 0
-materialFrame.Visible = false
-materialFrame.Parent = screenGui
-
-local matCorner = Instance.new("UICorner")
-matCorner.CornerRadius = UDim.new(0, 8)
-matCorner.Parent = materialFrame
-
-local matScroll = Instance.new("ScrollingFrame")
-matScroll.Size = UDim2.new(1, -10, 1, -10)
-matScroll.Position = UDim2.new(0, 5, 0, 5)
-matScroll.BackgroundTransparency = 1
-matScroll.ScrollBarThickness = 4
-matScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-matScroll.Parent = materialFrame
-
-local matLayout = Instance.new("UIListLayout")
-matLayout.Padding = UDim.new(0, 3)
-matLayout.Parent = matScroll
-
-for _, mat in pairs(materials) do
-    local matBtn = Instance.new("TextButton")
-    matBtn.Size = UDim2.new(1, 0, 0, 25)
-    matBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-    matBtn.Text = mat
-    matBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
-    matBtn.TextSize = 11
-    matBtn.Font = Enum.Font.Gotham
-    matBtn.Parent = matScroll
-    
-    local mCorner = Instance.new("UICorner")
-    mCorner.CornerRadius = UDim.new(0, 4)
-    mCorner.Parent = matBtn
-    
-    matBtn.MouseButton1Click:Connect(function()
-        if selectedObject then
-            selectedObject.Material = Enum.Material[mat]
-        end
-    end)
-end
-
--- Keyframe timeline frame
-local keyframeFrame = Instance.new("Frame")
-keyframeFrame.Name = "KeyframeTimeline"
-keyframeFrame.Size = UDim2.new(0, 500, 0, 150)
-keyframeFrame.Position = UDim2.new(0.5, -250, 1, -170)
-keyframeFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-keyframeFrame.BorderSizePixel = 0
-keyframeFrame.Visible = false
-keyframeFrame.Parent = screenGui
-
-local kfCorner = Instance.new("UICorner")
-kfCorner.CornerRadius = UDim.new(0, 8)
-kfCorner.Parent = keyframeFrame
-
--- Keyframe controls
-local playBtn = Instance.new("TextButton")
-playBtn.Size = UDim2.new(0, 60, 0, 25)
-playBtn.Position = UDim2.new(0, 10, 0, 10)
-playBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
-playBtn.Text = "Play"
-playBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-playBtn.TextSize = 11
-playBtn.Font = Enum.Font.GothamBold
-playBtn.Parent = keyframeFrame
-
-local playCorner = Instance.new("UICorner")
-playCorner.CornerRadius = UDim.new(0, 4)
-playCorner.Parent = playBtn
-
-local addKfBtn = Instance.new("TextButton")
-addKfBtn.Size = UDim2.new(0, 60, 0, 25)
-addKfBtn.Position = UDim2.new(0, 80, 0, 10)
-addKfBtn.BackgroundColor3 = Color3.fromRGB(52, 152, 219)
-addKfBtn.Text = "Add KF"
-addKfBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-addKfBtn.TextSize = 11
-addKfBtn.Font = Enum.Font.GothamBold
-addKfBtn.Parent = keyframeFrame
-
-local addKfCorner = Instance.new("UICorner")
-addKfCorner.CornerRadius = UDim.new(0, 4)
-addKfCorner.Parent = addKfBtn
-
-local removeKfBtn = Instance.new("TextButton")
-removeKfBtn.Size = UDim2.new(0, 70, 0, 25)
-removeKfBtn.Position = UDim2.new(0, 150, 0, 10)
-removeKfBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
-removeKfBtn.Text = "Remove"
-removeKfBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-removeKfBtn.TextSize = 11
-removeKfBtn.Font = Enum.Font.GothamBold
-removeKfBtn.Parent = keyframeFrame
-
-local remKfCorner = Instance.new("UICorner")
-remKfCorner.CornerRadius = UDim.new(0, 4)
-remKfCorner.Parent = removeKfBtn
-
--- Timeline scroll
-local timelineScroll = Instance.new("ScrollingFrame")
-timelineScroll.Size = UDim2.new(1, -20, 0, 90)
-timelineScroll.Position = UDim2.new(0, 10, 0, 45)
-timelineScroll.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-timelineScroll.BorderSizePixel = 0
-timelineScroll.ScrollBarThickness = 4
-timelineScroll.CanvasSize = UDim2.new(10, 0, 0, 0)
-timelineScroll.Parent = keyframeFrame
-
-local tlCorner = Instance.new("UICorner")
-tlCorner.CornerRadius = UDim.new(0, 4)
-tlCorner.Parent = timelineScroll
-
--- Play animation
-playBtn.MouseButton1Click:Connect(function()
-    if isPlaying then
-        isPlaying = false
-        playBtn.Text = "Play"
-        playBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
-    else
-        isPlaying = true
-        playBtn.Text = "Stop"
-        playBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
-        
-        -- Animate each object with keyframes
-        for obj, kfData in pairs(keyframes) do
-            if obj and obj.Parent and #kfData > 1 then
-                for i = 1, #kfData - 1 do
-                    local kf1 = kfData[i]
-                    local kf2 = kfData[i + 1]
-                    local duration = (kf2.time - kf1.time) / 10
-                    
-                    if currentEasingStyle then
-                        local tween = TweenService:Create(obj, TweenInfo.new(duration, currentEasingStyle), {
-                            Position = kf2.position,
-                            Size = kf2.size or obj.Size
-                        })
-                        tween:Play()
-                        tween.Completed:Wait()
-                    else
-                        -- Instant
-                        obj.Position = kf2.position
-                        if kf2.size then obj.Size = kf2.size end
-                        wait(duration)
+        local dragging = false
+        clickDetector.MouseClick:Connect(function()
+            dragging = not dragging
+            if dragging then
+                sphere.Color = Color3.fromRGB(255, 255, 100)
+                local startPos = obj.Position
+                local startSize = obj.Size
+                local connection
+                connection = RunService.RenderStepped:Connect(function()
+                    if not dragging then
+                        connection:Disconnect()
+                        sphere.Color = Color3.fromRGB(255, 150, 100)
+                        return
                     end
-                end
+                    local mouse = player:GetMouse()
+                    local ray = Ray.new(mouse.UnitRay.Origin, mouse.UnitRay.Direction * 1000)
+                    local hit, pos = workspace:FindPartOnRay(ray, player.Character)
+                    local delta = pos - startPos
+                    obj.Size = Vector3.new(
+                        math.max(1, startSize.X + delta.X * offset.X * 2),
+                        math.max(1, startSize.Y + delta.Y * offset.Y * 2),
+                        math.max(1, startSize.Z + delta.Z * offset.Z * 2)
+                    )
+                    updatePos()
+                end)
             end
-        end
+        end)
         
-        isPlaying = false
-        playBtn.Text = "Play"
-        playBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+        RunService.RenderStepped:Connect(updatePos)
     end
-end)
+end
 
--- Add keyframe
-addKfBtn.MouseButton1Click:Connect(function()
-    if selectedObject then
-        if not keyframes[selectedObject] then
-            keyframes[selectedObject] = {}
-        end
-        
-        local time = #keyframes[selectedObject] * 10
-        table.insert(keyframes[selectedObject], {
-            time = time,
-            position = selectedObject.Position,
-            size = selectedObject.Size
-        })
-        
-        -- Visual keyframe marker
-        local kfMarker = Instance.new("Frame")
-        kfMarker.Size = UDim2.new(0, 10, 0, 10)
-        kfMarker.Position = UDim2.new(0, time * 5, 0.5, -5)
-        kfMarker.BackgroundColor3 = Color3.fromRGB(52, 152, 219)
-        kfMarker.BorderSizePixel = 0
-        kfMarker.Parent = timelineScroll
-        
-        local kfCorner = Instance.new("UICorner")
-        kfCorner.CornerRadius = UDim.new(1, 0)
-        kfCorner.Parent = kfMarker
-    end
-end)
+-- Button configuration
+local buttonObjects = {}
+
+local mainButtons = {
+    {name = "Add", color = Color3.fromRGB(80, 200, 120)},
+    {name = "Select", color = Color3.fromRGB(100, 150, 255)},
+    {name = "Remove", color = Color3.fromRGB(255, 100, 100)},
+    {name = "Move", color = Color3.fromRGB(255, 200, 100)},
+    {name = "Resize", color = Color3.fromRGB(200, 100, 255)},
+    {name = "Materials", color = Color3.fromRGB(150, 150, 150)},
+    {name = "Color", color = Color3.fromRGB(255, 150, 200)},
+    {name = "Keyframes", color = Color3.fromRGB(100, 200, 200)},
+    {name = "Smooths", color = Color3.fromRGB(200, 200, 100), hasSubmenu = true}
+}
+
+local smoothsSubmenu = {
+    {name = "Linear", color = Color3.fromRGB(180, 180, 90), style = Enum.EasingStyle.Linear},
+    {name = "Elastic", color = Color3.fromRGB(180, 180, 90), style = Enum.EasingStyle.Elastic},
+    {name = "Instant", color = Color3.fromRGB(180, 180, 90), style = nil}
+}
+
+local function createToggleButton(config, parent, isSubmenu)
+    local button = Instance.new("TextButton")
+    button.Name = config.name
+    button.Size = UDim2.new(0, isSubmenu and 70 or 80, 0, 28)
+    button.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+    button.BorderSizePixel = 0
+    button.Text = config.name
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.TextSize = 11
+    button.Font = Enum.Font.GothamBold
+    button.Parent = parent
+    
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 4)
+    btnCorner.Parent = button
+    
+    local highlight = Instance.new("Frame")
+    highlight.Name = "Highlight"
+    highlight.Size = UDim2.new(1, 0, 0, 2)
+    highlight.Position = UDim2.new(0, 0, 1, -2)
+    highlight.BackgroundColor3 = config.color
+    highlight.BorderSizePixel = 0
+    highlight.Visible = false
+    highlight.Parent = button
+    
+    return button, highlight
+end
+
+-- Create smooths container
+local smoothsContainer = Instance.new("Frame")
+smoothsContainer.Name = "SmoothsContainer"
+smoothsContainer.Size = UDim2.new(1, 0, 0, 0)
+smoothsContainer.Position = UDim2.new(0, 0, 0, 31)
+smoothsContainer.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+smoothsContainer.BorderSizePixel = 0
+smoothsContainer.Visible = false
+smoothsContainer.Parent = contentFrame
+
+local smoothCorner = Instance.new("UICorner")
+smoothCorner.CornerRadius = UDim.new(0, 4)
+smoothCorner.Parent = smoothsContainer
+
+local containerLayout = Instance.new("UIListLayout")
+containerLayout.FillDirection = Enum.FillDirection.Horizontal
+containerLayout.Padding = UDim.new(0, 3)
+containerLayout.SortOrder = Enum.SortOrder.LayoutOrder
+containerLayout.Parent = smoothsContainer
 
 -- Create main buttons
-for i, config in ipairs(buttons) do
-    local button, highlight = createToggleButton(config, scrollFrame, false)
+for i, config in ipairs(mainButtons) do
+    local button, highlight = createToggleButton(config, buttonContainer, false)
     button.LayoutOrder = i
     
     buttonObjects[config.name] = {button = button, highlight = highlight, color = config.color}
     
+    -- Create submenu for Smooths
     if config.hasSubmenu then
-        smoothsContainer = Instance.new("Frame")
-        smoothsContainer.Name = "SmoothsContainer"
-        smoothsContainer.Size = UDim2.new(1, 0, 0, 0)
-        smoothsContainer.BackgroundTransparency = 1
-        smoothsContainer.Visible = false
-        smoothsContainer.LayoutOrder = i + 0.5
-        smoothsContainer.Parent = scrollFrame
-        
-        local containerLayout = Instance.new("UIListLayout")
-        containerLayout.Padding = UDim.new(0, 3)
-        containerLayout.SortOrder = Enum.SortOrder.LayoutOrder
-        containerLayout.Parent = smoothsContainer
-        
         containerLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
             smoothsContainer.Size = UDim2.new(1, 0, 0, containerLayout.AbsoluteContentSize.Y + 6)
         end)
@@ -521,19 +663,27 @@ for i, config in ipairs(buttons) do
             
             subButton.MouseButton1Click:Connect(function()
                 if activeSmoothsButton and activeSmoothsButton ~= subButton then
-                    buttonObjects[activeSmoothsButton.Name].highlight.Visible = false
-                    buttonObjects[activeSmoothsButton.Name].button.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+                    local prevName = activeSmoothsButton.Name
+                    if buttonObjects[prevName] then
+                        buttonObjects[prevName].highlight.Visible = false
+                        buttonObjects[prevName].button.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+                    end
                 end
                 
                 activeSmoothsButton = subButton
                 subHighlight.Visible = true
                 subButton.BackgroundColor3 = Color3.fromRGB(60, 60, 65)
-                currentEasingStyle = subConfig.style
+                
+                if subConfig.style then
+                    currentEasingStyle = subConfig.style
+                else
+                    currentEasingStyle = nil -- Instant
+                end
             end)
         end
     end
     
-        button.MouseButton1Click:Connect(function()
+    button.MouseButton1Click:Connect(function()
         if config.hasSubmenu then
             smoothsExpanded = not smoothsExpanded
             smoothsContainer.Visible = smoothsExpanded
@@ -566,8 +716,9 @@ for i, config in ipairs(buttons) do
             part.Parent = workspace
             table.insert(addedObjects, part)
             selectedObject = part
+            updateKeyframeDisplay()
         elseif config.name == "Select" then
-            -- Click to select
+            -- Click to select mode
         elseif config.name == "Move" and selectedObject then
             createMoveSpheres(selectedObject)
         elseif config.name == "Resize" and selectedObject then
@@ -578,12 +729,17 @@ for i, config in ipairs(buttons) do
             materialFrame.Visible = true
         elseif config.name == "Keyframes" then
             keyframeFrame.Visible = true
+            updateKeyframeDisplay()
         elseif config.name == "Remove" and selectedObject then
             keyframes[selectedObject] = nil
             selectedObject:Destroy()
-            table.remove(addedObjects, table.find(addedObjects, selectedObject))
+            local index = table.find(addedObjects, selectedObject)
+            if index then
+                table.remove(addedObjects, index)
+            end
             selectedObject = nil
             clearSpheres()
+            updateKeyframeDisplay()
         end
     end)
 end
@@ -597,7 +753,7 @@ mouse.Button1Down:Connect(function()
     end
 end)
 
--- Dragging functionality
+-- Dragging functionality for UI
 local dragging = false
 local dragInput, dragStart, startPos
 
@@ -631,3 +787,5 @@ UserInputService.InputChanged:Connect(function(input)
         update(input)
     end
 end)
+
+print("Object Editor loaded successfully!")
