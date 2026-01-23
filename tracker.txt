@@ -520,6 +520,7 @@ saveKeyframeButton.MouseButton1Click:Connect(function()
 end)
 
 -- Generate code (Tab 1) - FIXED VERSION
+-- Generate code (Tab 1) - FIXED VERSION
 generateButton.MouseButton1Click:Connect(function()
 	if #savedKeyframes == 0 then
 		codeTextBox.Text = "⚠️ No keyframes saved!"
@@ -763,4 +764,5 @@ player.CharacterAdded:Connect(function(char)
 		loadedAnimTrack:Stop()
 		loadedAnimTrack = nil
 	end
+
 end)
