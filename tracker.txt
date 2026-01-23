@@ -519,21 +519,26 @@ saveKeyframeButton.MouseButton1Click:Connect(function()
 	codeTextBox.Text = "✅ Keyframe #" .. keyframeCount .. " saved!"
 end)
 
--- Generate code (Tab 1)
+-- Generate code (Tab 1) - FIXED VERSION
 generateButton.MouseButton1Click:Connect(function()
 	if #savedKeyframes == 0 then
 		codeTextBox.Text = "⚠️ No keyframes saved!"
 		return
 	end
 	
-	local code = "-- Animation Sequence Code\n"
-	code = code .. "local hum = game.Players.LocalPlayer.Character:WaitForChild('Humanoid')\n\n"
+	local code = "-- Animation Keyframes Code\n"
+	code = code .. "local Players = game:GetService('Players')\n"
+	code = code .. "local player = Players.LocalPlayer\n"
+	code = code .. "local char = player.Character or player.CharacterAdded:Wait()\n"
+	code = code .. "local hum = char:WaitForChild('Humanoid')\n"
+	code = code .. "local animator = hum:WaitForChild('Animator')\n\n"
 	
 	for i, keyframe in ipairs(savedKeyframes) do
 		for j, animData in ipairs(keyframe.animations) do
+			code = code .. string.format("-- Keyframe %d at %.2fs\n", i, animData.timePosition)
 			code = code .. string.format("local anim%d = Instance.new('Animation')\n", i)
 			code = code .. string.format("anim%d.AnimationId = '%s'\n", i, animData.animationId)
-			code = code .. string.format("local track%d = hum:LoadAnimation(anim%d)\n", i, i)
+			code = code .. string.format("local track%d = animator:LoadAnimation(anim%d)\n", i, i)
 			code = code .. string.format("track%d:Play()\n", i)
 			code = code .. string.format("track%d:AdjustSpeed(0)\n", i)
 			code = code .. string.format("track%d.TimePosition = %.3f\n\n", i, animData.timePosition)
@@ -714,12 +719,16 @@ generateBtn2.MouseButton1Click:Connect(function()
 	end
 	
 	local code = "-- Timeline Animation Code\n"
-	code = code .. "local hum = game.Players.LocalPlayer.Character:WaitForChild('Humanoid')\n"
+	code = code .. "local Players = game:GetService('Players')\n"
+	code = code .. "local player = Players.LocalPlayer\n"
+	code = code .. "local char = player.Character or player.CharacterAdded:Wait()\n"
+	code = code .. "local hum = char:WaitForChild('Humanoid')\n"
+	code = code .. "local animator = hum:WaitForChild('Animator')\n\n"
 	code = code .. "local anim = Instance.new('Animation')\n"
 	code = code .. string.format("anim.AnimationId = '%s'\n", loadedAnimTrack.Animation.AnimationId)
-	code = code .. "local track = hum:LoadAnimation(anim)\n"
+	code = code .. "local track = animator:LoadAnimation(anim)\n"
 	code = code .. "track:Play()\n"
-	code = code .. "track:AdjustSpeed(0) -- Frozen first\n"
+	code = code .. "track:AdjustSpeed(0)\n"
 	code = code .. string.format("track.TimePosition = %.3f\n", currentTimePosition)
 	
 	codeTextBox2.Text = code
@@ -755,5 +764,3 @@ player.CharacterAdded:Connect(function(char)
 		loadedAnimTrack = nil
 	end
 end)
-
-print("✅ Animation Freezer GUI loaded successfully!")
