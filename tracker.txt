@@ -274,20 +274,20 @@ timelineLabel.TextXAlignment = Enum.TextXAlignment.Left
 timelineLabel.Parent = tab2Content
 
 local timelineBg = Instance.new("Frame")
-timelineBg.Size = UDim2.new(1, 0, 0, 20)
+timelineBg.Size = UDim2.new(1, 0, 0, 8)
 timelineBg.Position = UDim2.new(0, 0, 0, 90)
 timelineBg.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 timelineBg.BorderSizePixel = 0
 timelineBg.Parent = tab2Content
 
 local timelineCorner = Instance.new("UICorner")
-timelineCorner.CornerRadius = UDim.new(0, 10)
+timelineCorner.CornerRadius = UDim.new(0, 4)
 timelineCorner.Parent = timelineBg
 
 local scrubber = Instance.new("Frame")
 scrubber.Name = "Scrubber"
-scrubber.Size = UDim2.new(0, 24, 0, 24)
-scrubber.Position = UDim2.new(0, -12, 0.5, -12)
+scrubber.Size = UDim2.new(0, 16, 0, 16)
+scrubber.Position = UDim2.new(0, -8, 0.5, -8)
 scrubber.BackgroundColor3 = Color3.fromRGB(100, 200, 255)
 scrubber.BorderSizePixel = 0
 scrubber.Active = true
@@ -298,10 +298,10 @@ scrubberCorner.CornerRadius = UDim.new(1, 0)
 scrubberCorner.Parent = scrubber
 
 local generateBtn2 = Instance.new("TextButton")
-generateBtn2.Size = UDim2.new(1, 0, 0, 35)
-generateBtn2.Position = UDim2.new(0, 0, 0, 110)
+generateBtn2.Size = UDim2.new(0.48, 0, 0, 35)
+generateBtn2.Position = UDim2.new(0, 0, 0, 120)
 generateBtn2.BackgroundColor3 = Color3.fromRGB(60, 180, 100)
-generateBtn2.Text = "⚡ Generate Code (Timeline)"
+generateBtn2.Text = "⚡ Generate Code"
 generateBtn2.TextColor3 = Color3.fromRGB(255, 255, 255)
 generateBtn2.Font = Enum.Font.GothamBold
 generateBtn2.TextSize = 13
@@ -313,9 +313,25 @@ local gen2Corner = Instance.new("UICorner")
 gen2Corner.CornerRadius = UDim.new(0, 6)
 gen2Corner.Parent = generateBtn2
 
+local saveKeyframe2Btn = Instance.new("TextButton")
+saveKeyframe2Btn.Size = UDim2.new(0.48, 0, 0, 35)
+saveKeyframe2Btn.Position = UDim2.new(0.52, 0, 0, 120)
+saveKeyframe2Btn.BackgroundColor3 = Color3.fromRGB(100, 120, 255)
+saveKeyframe2Btn.Text = "💾 Save Keyframe"
+saveKeyframe2Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+saveKeyframe2Btn.Font = Enum.Font.GothamBold
+saveKeyframe2Btn.TextSize = 13
+saveKeyframe2Btn.BorderSizePixel = 0
+saveKeyframe2Btn.AutoButtonColor = false
+saveKeyframe2Btn.Parent = tab2Content
+
+local saveKey2Corner = Instance.new("UICorner")
+saveKey2Corner.CornerRadius = UDim.new(0, 6)
+saveKey2Corner.Parent = saveKeyframe2Btn
+
 local codeTextBox2 = Instance.new("TextBox")
 codeTextBox2.Size = UDim2.new(1, 0, 0, 60)
-codeTextBox2.Position = UDim2.new(0, 0, 0, 150)
+codeTextBox2.Position = UDim2.new(0, 0, 0, 160)
 codeTextBox2.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 codeTextBox2.BorderSizePixel = 0
 codeTextBox2.Text = "Code will appear here..."
@@ -513,26 +529,9 @@ scrubber.InputBegan:Connect(function(input)
 	end
 end)
 
-UserInputService.InputEnded:Connect(function(input)
+scrubber.InputEnded:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		scrubberDragging = false
-	end
-end)
-
--- Allow clicking anywhere on timeline bar
-timelineBg.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		scrubberDragging = true
-		local relativeX = input.Position.X - timelineBg.AbsolutePosition.X
-		local percent = math.clamp(relativeX / timelineBg.AbsoluteSize.X, 0, 1)
-		
-		scrubber.Position = UDim2.new(percent, -12, 0.5, -12)
-		currentTimePosition = percent * animLength
-		timelineLabel.Text = string.format("Timeline: %.2fs / %.2fs", currentTimePosition, animLength)
-		
-		if loadedAnimTrack then
-			loadedAnimTrack.TimePosition = currentTimePosition
-		end
 	end
 end)
 
@@ -541,9 +540,9 @@ UserInputService.InputChanged:Connect(function(input)
 		local relativeX = input.Position.X - timelineBg.AbsolutePosition.X
 		local percent = math.clamp(relativeX / timelineBg.AbsoluteSize.X, 0, 1)
 		
-		scrubber.Position = UDim2.new(percent, -12, 0.5, -12)
+		scrubber.Position = UDim2.new(percent, -8, 0.5, -8)
 		currentTimePosition = percent * animLength
-		timelineLabel.Text = string.format("Timeline: %.2fs / %.2fs", currentTimePosition, animLength)
+		timelineLabel.Text = string.format("Timeline: %.2fs", currentTimePosition)
 		
 		if loadedAnimTrack then
 			loadedAnimTrack.TimePosition = currentTimePosition
@@ -559,36 +558,89 @@ loadAnimBtn.MouseButton1Click:Connect(function()
 		return
 	end
 	
-	-- Format the animation ID properly
-	if not string.find(animId, "rbxassetid://") then
-		animId = "rbxassetid://" .. animId
-	end
-	
 	if loadedAnimTrack then
 		loadedAnimTrack:Stop()
-		loadedAnimTrack = nil
 	end
 	
 	local anim = Instance.new("Animation")
 	anim.AnimationId = animId
 	
-	local success, err = pcall(function()
-		loadedAnimTrack = humanoid:LoadAnimation(anim)
-		loadedAnimTrack:Play()
-		wait(0.1) -- Wait for animation to initialize
-		loadedAnimTrack:AdjustSpeed(0) -- Freeze immediately
-		loadedAnimTrack.TimePosition = 0
+	loadedAnimTrack = humanoid:LoadAnimation(anim)
+	loadedAnimTrack:Play()
+	loadedAnimTrack:AdjustSpeed(0)
+	
+	animLength = loadedAnimTrack.Length
+	currentTimePosition = 0
+	scrubber.Position = UDim2.new(0, -8, 0.5, -8)
+	timelineLabel.Text = string.format("Timeline: 0.00s / %.2fs", animLength)
+	
+	codeTextBox2.Text = "✅ Animation loaded!"
+end)
+
+-- Save keyframe from timeline (Tab 2)
+saveKeyframe2Btn.MouseButton1Click:Connect(function()
+	if not loadedAnimTrack then
+		codeTextBox2.Text = "⚠️ Load an animation first!"
+		return
+	end
+	
+	keyframeCount = keyframeCount + 1
+	
+	table.insert(savedKeyframes, {
+		id = keyframeCount,
+		animations = {{
+			track = loadedAnimTrack,
+			animationId = loadedAnimTrack.Animation.AnimationId,
+			timePosition = currentTimePosition,
+			speed = 0
+		}}
+	})
+	
+	local keyframeButton = Instance.new("TextButton")
+	keyframeButton.Name = "Keyframe" .. keyframeCount
+	keyframeButton.Size = UDim2.new(1, -8, 0, 28)
+	keyframeButton.BackgroundColor3 = Color3.fromRGB(60, 60, 75)
+	keyframeButton.Text = string.format("🎯 #%d (%.2fs)", keyframeCount, currentTimePosition)
+	keyframeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	keyframeButton.Font = Enum.Font.Gotham
+	keyframeButton.TextSize = 11
+	keyframeButton.BorderSizePixel = 0
+	keyframeButton.AutoButtonColor = false
+	keyframeButton.LayoutOrder = keyframeCount
+	keyframeButton.Parent = keyframesScrollFrame
+	
+	local keyCorner = Instance.new("UICorner")
+	keyCorner.CornerRadius = UDim.new(0, 5)
+	keyCorner.Parent = keyframeButton
+	
+	local deleteBtn = Instance.new("TextButton")
+	deleteBtn.Size = UDim2.new(0, 24, 0, 24)
+	deleteBtn.Position = UDim2.new(1, -26, 0.5, -12)
+	deleteBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+	deleteBtn.Text = "×"
+	deleteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	deleteBtn.Font = Enum.Font.GothamBold
+	deleteBtn.TextSize = 14
+	deleteBtn.BorderSizePixel = 0
+	deleteBtn.Parent = keyframeButton
+	
+	local delCorner = Instance.new("UICorner")
+	delCorner.CornerRadius = UDim.new(0, 5)
+	delCorner.Parent = deleteBtn
+	
+	local keyframeId = keyframeCount
+	deleteBtn.MouseButton1Click:Connect(function()
+		for i, kf in ipairs(savedKeyframes) do
+			if kf.id == keyframeId then
+				table.remove(savedKeyframes, i)
+				break
+			end
+		end
+		keyframeButton:Destroy()
 	end)
 	
-	if success and loadedAnimTrack then
-		animLength = loadedAnimTrack.Length
-		currentTimePosition = 0
-		scrubber.Position = UDim2.new(0, -12, 0.5, -12)
-		timelineLabel.Text = string.format("Timeline: 0.00s / %.2fs", animLength)
-		codeTextBox2.Text = "✅ Animation loaded! Drag the dot to scrub."
-	else
-		codeTextBox2.Text = "⚠️ Failed to load animation: " .. tostring(err)
-	end
+	keyframesScrollFrame.CanvasSize = UDim2.new(0, 0, 0, keyframesLayout.AbsoluteContentSize.Y + 8)
+	codeTextBox2.Text = "✅ Keyframe #" .. keyframeCount .. " saved at " .. string.format("%.2fs", currentTimePosition) .. "!"
 end)
 
 -- Generate timeline code
@@ -605,7 +657,7 @@ generateBtn2.MouseButton1Click:Connect(function()
 	code = code .. "local track = hum:LoadAnimation(anim)\n"
 	code = code .. "track:Play()\n"
 	code = code .. string.format("track.TimePosition = %.3f\n", currentTimePosition)
-	code = code .. "track:AdjustSpeed(0)\n"
+	code = code .. "track:AdjustSpeed(0) -- Frozen\n"
 	
 	codeTextBox2.Text = code
 end)
