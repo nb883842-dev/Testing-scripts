@@ -233,7 +233,7 @@ animIdBox.Size = UDim2.new(1, -70, 0, 30)
 animIdBox.Position = UDim2.new(0, 0, 0, 25)
 animIdBox.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 animIdBox.BorderSizePixel = 0
-animIdBox.PlaceholderText = "rbxassetid://123456789"
+animIdBox.PlaceholderText = "123456789"
 animIdBox.Text = ""
 animIdBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 animIdBox.Font = Enum.Font.Code
@@ -274,20 +274,20 @@ timelineLabel.TextXAlignment = Enum.TextXAlignment.Left
 timelineLabel.Parent = tab2Content
 
 local timelineBg = Instance.new("Frame")
-timelineBg.Size = UDim2.new(1, 0, 0, 8)
+timelineBg.Size = UDim2.new(1, 0, 0, 20)
 timelineBg.Position = UDim2.new(0, 0, 0, 90)
 timelineBg.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 timelineBg.BorderSizePixel = 0
 timelineBg.Parent = tab2Content
 
 local timelineCorner = Instance.new("UICorner")
-timelineCorner.CornerRadius = UDim.new(0, 4)
+timelineCorner.CornerRadius = UDim.new(0, 10)
 timelineCorner.Parent = timelineBg
 
 local scrubber = Instance.new("Frame")
 scrubber.Name = "Scrubber"
-scrubber.Size = UDim2.new(0, 16, 0, 16)
-scrubber.Position = UDim2.new(0, -8, 0.5, -8)
+scrubber.Size = UDim2.new(0, 24, 0, 24)
+scrubber.Position = UDim2.new(0, -12, 0.5, -12)
 scrubber.BackgroundColor3 = Color3.fromRGB(100, 200, 255)
 scrubber.BorderSizePixel = 0
 scrubber.Active = true
@@ -513,9 +513,26 @@ scrubber.InputBegan:Connect(function(input)
 	end
 end)
 
-scrubber.InputEnded:Connect(function(input)
+UserInputService.InputEnded:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		scrubberDragging = false
+	end
+end)
+
+-- Allow clicking anywhere on timeline bar
+timelineBg.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		scrubberDragging = true
+		local relativeX = input.Position.X - timelineBg.AbsolutePosition.X
+		local percent = math.clamp(relativeX / timelineBg.AbsoluteSize.X, 0, 1)
+		
+		scrubber.Position = UDim2.new(percent, -12, 0.5, -12)
+		currentTimePosition = percent * animLength
+		timelineLabel.Text = string.format("Timeline: %.2fs / %.2fs", currentTimePosition, animLength)
+		
+		if loadedAnimTrack then
+			loadedAnimTrack.TimePosition = currentTimePosition
+		end
 	end
 end)
 
@@ -524,9 +541,9 @@ UserInputService.InputChanged:Connect(function(input)
 		local relativeX = input.Position.X - timelineBg.AbsolutePosition.X
 		local percent = math.clamp(relativeX / timelineBg.AbsoluteSize.X, 0, 1)
 		
-		scrubber.Position = UDim2.new(percent, -8, 0.5, -8)
+		scrubber.Position = UDim2.new(percent, -12, 0.5, -12)
 		currentTimePosition = percent * animLength
-		timelineLabel.Text = string.format("Timeline: %.2fs", currentTimePosition)
+		timelineLabel.Text = string.format("Timeline: %.2fs / %.2fs", currentTimePosition, animLength)
 		
 		if loadedAnimTrack then
 			loadedAnimTrack.TimePosition = currentTimePosition
@@ -542,23 +559,36 @@ loadAnimBtn.MouseButton1Click:Connect(function()
 		return
 	end
 	
+	-- Format the animation ID properly
+	if not string.find(animId, "rbxassetid://") then
+		animId = "rbxassetid://" .. animId
+	end
+	
 	if loadedAnimTrack then
 		loadedAnimTrack:Stop()
+		loadedAnimTrack = nil
 	end
 	
 	local anim = Instance.new("Animation")
 	anim.AnimationId = animId
 	
-	loadedAnimTrack = humanoid:LoadAnimation(anim)
-	loadedAnimTrack:Play()
-	loadedAnimTrack:AdjustSpeed(0)
+	local success, err = pcall(function()
+		loadedAnimTrack = humanoid:LoadAnimation(anim)
+		loadedAnimTrack:Play()
+		wait(0.1) -- Wait for animation to initialize
+		loadedAnimTrack:AdjustSpeed(0) -- Freeze immediately
+		loadedAnimTrack.TimePosition = 0
+	end)
 	
-	animLength = loadedAnimTrack.Length
-	currentTimePosition = 0
-	scrubber.Position = UDim2.new(0, -8, 0.5, -8)
-	timelineLabel.Text = string.format("Timeline: 0.00s / %.2fs", animLength)
-	
-	codeTextBox2.Text = "✅ Animation loaded!"
+	if success and loadedAnimTrack then
+		animLength = loadedAnimTrack.Length
+		currentTimePosition = 0
+		scrubber.Position = UDim2.new(0, -12, 0.5, -12)
+		timelineLabel.Text = string.format("Timeline: 0.00s / %.2fs", animLength)
+		codeTextBox2.Text = "✅ Animation loaded! Drag the dot to scrub."
+	else
+		codeTextBox2.Text = "⚠️ Failed to load animation: " .. tostring(err)
+	end
 end)
 
 -- Generate timeline code
@@ -568,16 +598,14 @@ generateBtn2.MouseButton1Click:Connect(function()
 		return
 	end
 	
-	local code = string.format([[
--- Timeline Animation Code
-local hum = game.Players.LocalPlayer.Character:WaitForChild('Humanoid')
-local anim = Instance.new('Animation')
-anim.AnimationId = '%s'
-local track = hum:LoadAnimation(anim)
-track:Play()
-track.TimePosition = %.3f
-track:AdjustSpeed(0)
-]], loadedAnimTrack.Animation.AnimationId, currentTimePosition)
+	local code = "-- Timeline Animation Code\n"
+	code = code .. "local hum = game.Players.LocalPlayer.Character:WaitForChild('Humanoid')\n"
+	code = code .. "local anim = Instance.new('Animation')\n"
+	code = code .. string.format("anim.AnimationId = '%s'\n", loadedAnimTrack.Animation.AnimationId)
+	code = code .. "local track = hum:LoadAnimation(anim)\n"
+	code = code .. "track:Play()\n"
+	code = code .. string.format("track.TimePosition = %.3f\n", currentTimePosition)
+	code = code .. "track:AdjustSpeed(0)\n"
 	
 	codeTextBox2.Text = code
 end)
