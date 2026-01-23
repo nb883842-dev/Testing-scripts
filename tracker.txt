@@ -1,0 +1,589 @@
+-- Tabbed Animation Freezer LocalScript
+-- Place this in StarterPlayer > StarterPlayerScripts or StarterGui
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AnimationFreezerGui"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+-- Hide/Show toggle button (always visible)
+local toggleVisibilityBtn = Instance.new("TextButton")
+toggleVisibilityBtn.Name = "ToggleVisibility"
+toggleVisibilityBtn.Size = UDim2.new(0, 50, 0, 50)
+toggleVisibilityBtn.Position = UDim2.new(1, -60, 0, 10)
+toggleVisibilityBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+toggleVisibilityBtn.Text = "🎬"
+toggleVisibilityBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleVisibilityBtn.Font = Enum.Font.GothamBold
+toggleVisibilityBtn.TextSize = 24
+toggleVisibilityBtn.BorderSizePixel = 0
+toggleVisibilityBtn.Parent = screenGui
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 10)
+toggleCorner.Parent = toggleVisibilityBtn
+
+-- Main draggable Frame (rectangle shape)
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 450, 0, 300)
+mainFrame.Position = UDim2.new(0.5, -225, 0.5, -150)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Visible = true
+mainFrame.Parent = screenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 10)
+mainCorner.Parent = mainFrame
+
+-- Title bar
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1, 0, 0, 35)
+titleBar.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 10)
+titleCorner.Parent = titleBar
+
+local titleBottomFix = Instance.new("Frame")
+titleBottomFix.Size = UDim2.new(1, 0, 0, 10)
+titleBottomFix.Position = UDim2.new(0, 0, 1, -10)
+titleBottomFix.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+titleBottomFix.BorderSizePixel = 0
+titleBottomFix.Parent = titleBar
+
+local titleText = Instance.new("TextLabel")
+titleText.Size = UDim2.new(1, -15, 1, 0)
+titleText.Position = UDim2.new(0, 10, 0, 0)
+titleText.BackgroundTransparency = 1
+titleText.Text = "🎬 Animation Freezer"
+titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleText.Font = Enum.Font.GothamBold
+titleText.TextSize = 15
+titleText.TextXAlignment = Enum.TextXAlignment.Left
+titleText.Parent = titleBar
+
+-- Tab buttons container
+local tabContainer = Instance.new("Frame")
+tabContainer.Name = "TabContainer"
+tabContainer.Size = UDim2.new(1, 0, 0, 35)
+tabContainer.Position = UDim2.new(0, 0, 0, 35)
+tabContainer.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+tabContainer.BorderSizePixel = 0
+tabContainer.Parent = mainFrame
+
+-- Tab buttons
+local tab1Btn = Instance.new("TextButton")
+tab1Btn.Name = "Tab1"
+tab1Btn.Size = UDim2.new(0.5, -2, 1, 0)
+tab1Btn.Position = UDim2.new(0, 0, 0, 0)
+tab1Btn.BackgroundColor3 = Color3.fromRGB(60, 180, 100)
+tab1Btn.Text = "Freeze & Keyframes"
+tab1Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+tab1Btn.Font = Enum.Font.GothamBold
+tab1Btn.TextSize = 13
+tab1Btn.BorderSizePixel = 0
+tab1Btn.Parent = tabContainer
+
+local tab2Btn = Instance.new("TextButton")
+tab2Btn.Name = "Tab2"
+tab2Btn.Size = UDim2.new(0.5, -2, 1, 0)
+tab2Btn.Position = UDim2.new(0.5, 2, 0, 0)
+tab2Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+tab2Btn.Text = "Keyframes Extra"
+tab2Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+tab2Btn.Font = Enum.Font.GothamBold
+tab2Btn.TextSize = 13
+tab2Btn.BorderSizePixel = 0
+tab2Btn.Parent = tabContainer
+
+-- TAB 1: Freeze & Keyframes Content
+local tab1Content = Instance.new("Frame")
+tab1Content.Name = "Tab1Content"
+tab1Content.Size = UDim2.new(1, -16, 1, -78)
+tab1Content.Position = UDim2.new(0, 8, 0, 74)
+tab1Content.BackgroundTransparency = 1
+tab1Content.Visible = true
+tab1Content.Parent = mainFrame
+
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0.48, 0, 0, 35)
+toggleButton.Position = UDim2.new(0, 0, 0, 0)
+toggleButton.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+toggleButton.Text = "❄️ Freeze: OFF"
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.Font = Enum.Font.GothamBold
+toggleButton.TextSize = 13
+toggleButton.BorderSizePixel = 0
+toggleButton.AutoButtonColor = false
+toggleButton.Parent = tab1Content
+
+local toggleCorner2 = Instance.new("UICorner")
+toggleCorner2.CornerRadius = UDim.new(0, 6)
+toggleCorner2.Parent = toggleButton
+
+local saveKeyframeButton = Instance.new("TextButton")
+saveKeyframeButton.Size = UDim2.new(0.48, 0, 0, 35)
+saveKeyframeButton.Position = UDim2.new(0.52, 0, 0, 0)
+saveKeyframeButton.BackgroundColor3 = Color3.fromRGB(100, 120, 255)
+saveKeyframeButton.Text = "💾 Save Keyframe"
+saveKeyframeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+saveKeyframeButton.Font = Enum.Font.GothamBold
+saveKeyframeButton.TextSize = 13
+saveKeyframeButton.BorderSizePixel = 0
+saveKeyframeButton.AutoButtonColor = false
+saveKeyframeButton.Parent = tab1Content
+
+local saveKeyCorner2 = Instance.new("UICorner")
+saveKeyCorner2.CornerRadius = UDim.new(0, 6)
+saveKeyCorner2.Parent = saveKeyframeButton
+
+local keyframesScrollFrame = Instance.new("ScrollingFrame")
+keyframesScrollFrame.Size = UDim2.new(1, 0, 0, 70)
+keyframesScrollFrame.Position = UDim2.new(0, 0, 0, 40)
+keyframesScrollFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+keyframesScrollFrame.BorderSizePixel = 0
+keyframesScrollFrame.ScrollBarThickness = 4
+keyframesScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 120)
+keyframesScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+keyframesScrollFrame.Parent = tab1Content
+
+local scrollCorner2 = Instance.new("UICorner")
+scrollCorner2.CornerRadius = UDim.new(0, 6)
+scrollCorner2.Parent = keyframesScrollFrame
+
+local keyframesLayout = Instance.new("UIListLayout")
+keyframesLayout.Padding = UDim.new(0, 4)
+keyframesLayout.SortOrder = Enum.SortOrder.LayoutOrder
+keyframesLayout.Parent = keyframesScrollFrame
+
+local generateButton = Instance.new("TextButton")
+generateButton.Size = UDim2.new(1, 0, 0, 35)
+generateButton.Position = UDim2.new(0, 0, 0, 115)
+generateButton.BackgroundColor3 = Color3.fromRGB(60, 180, 100)
+generateButton.Text = "⚡ Generate Code"
+generateButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+generateButton.Font = Enum.Font.GothamBold
+generateButton.TextSize = 13
+generateButton.BorderSizePixel = 0
+generateButton.AutoButtonColor = false
+generateButton.Parent = tab1Content
+
+local genCorner2 = Instance.new("UICorner")
+genCorner2.CornerRadius = UDim.new(0, 6)
+genCorner2.Parent = generateButton
+
+local codeTextBox = Instance.new("TextBox")
+codeTextBox.Size = UDim2.new(1, 0, 0, 60)
+codeTextBox.Position = UDim2.new(0, 0, 0, 155)
+codeTextBox.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+codeTextBox.BorderSizePixel = 0
+codeTextBox.Text = "Code will appear here..."
+codeTextBox.TextColor3 = Color3.fromRGB(150, 255, 150)
+codeTextBox.Font = Enum.Font.Code
+codeTextBox.TextSize = 10
+codeTextBox.TextXAlignment = Enum.TextXAlignment.Left
+codeTextBox.TextYAlignment = Enum.TextYAlignment.Top
+codeTextBox.MultiLine = true
+codeTextBox.ClearTextOnFocus = false
+codeTextBox.TextWrapped = true
+codeTextBox.Parent = tab1Content
+
+local codeCorner2 = Instance.new("UICorner")
+codeCorner2.CornerRadius = UDim.new(0, 6)
+codeCorner2.Parent = codeTextBox
+
+-- TAB 2: Keyframes Extra Content
+local tab2Content = Instance.new("Frame")
+tab2Content.Name = "Tab2Content"
+tab2Content.Size = UDim2.new(1, -16, 1, -78)
+tab2Content.Position = UDim2.new(0, 8, 0, 74)
+tab2Content.BackgroundTransparency = 1
+tab2Content.Visible = false
+tab2Content.Parent = mainFrame
+
+local animIdLabel = Instance.new("TextLabel")
+animIdLabel.Size = UDim2.new(1, 0, 0, 20)
+animIdLabel.Position = UDim2.new(0, 0, 0, 0)
+animIdLabel.BackgroundTransparency = 1
+animIdLabel.Text = "Animation ID:"
+animIdLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+animIdLabel.Font = Enum.Font.GothamSemibold
+animIdLabel.TextSize = 12
+animIdLabel.TextXAlignment = Enum.TextXAlignment.Left
+animIdLabel.Parent = tab2Content
+
+local animIdBox = Instance.new("TextBox")
+animIdBox.Size = UDim2.new(1, -70, 0, 30)
+animIdBox.Position = UDim2.new(0, 0, 0, 25)
+animIdBox.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+animIdBox.BorderSizePixel = 0
+animIdBox.PlaceholderText = "rbxassetid://123456789"
+animIdBox.Text = ""
+animIdBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+animIdBox.Font = Enum.Font.Code
+animIdBox.TextSize = 11
+animIdBox.TextXAlignment = Enum.TextXAlignment.Left
+animIdBox.ClearTextOnFocus = false
+animIdBox.Parent = tab2Content
+
+local idCorner = Instance.new("UICorner")
+idCorner.CornerRadius = UDim.new(0, 6)
+idCorner.Parent = animIdBox
+
+local loadAnimBtn = Instance.new("TextButton")
+loadAnimBtn.Size = UDim2.new(0, 60, 0, 30)
+loadAnimBtn.Position = UDim2.new(1, -60, 0, 25)
+loadAnimBtn.BackgroundColor3 = Color3.fromRGB(100, 120, 255)
+loadAnimBtn.Text = "Load"
+loadAnimBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+loadAnimBtn.Font = Enum.Font.GothamBold
+loadAnimBtn.TextSize = 12
+loadAnimBtn.BorderSizePixel = 0
+loadAnimBtn.Parent = tab2Content
+
+local loadCorner = Instance.new("UICorner")
+loadCorner.CornerRadius = UDim.new(0, 6)
+loadCorner.Parent = loadAnimBtn
+
+-- Timeline scrubber
+local timelineLabel = Instance.new("TextLabel")
+timelineLabel.Size = UDim2.new(1, 0, 0, 20)
+timelineLabel.Position = UDim2.new(0, 0, 0, 65)
+timelineLabel.BackgroundTransparency = 1
+timelineLabel.Text = "Timeline: 0.00s"
+timelineLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+timelineLabel.Font = Enum.Font.GothamSemibold
+timelineLabel.TextSize = 12
+timelineLabel.TextXAlignment = Enum.TextXAlignment.Left
+timelineLabel.Parent = tab2Content
+
+local timelineBg = Instance.new("Frame")
+timelineBg.Size = UDim2.new(1, 0, 0, 8)
+timelineBg.Position = UDim2.new(0, 0, 0, 90)
+timelineBg.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+timelineBg.BorderSizePixel = 0
+timelineBg.Parent = tab2Content
+
+local timelineCorner = Instance.new("UICorner")
+timelineCorner.CornerRadius = UDim.new(0, 4)
+timelineCorner.Parent = timelineBg
+
+local scrubber = Instance.new("Frame")
+scrubber.Name = "Scrubber"
+scrubber.Size = UDim2.new(0, 16, 0, 16)
+scrubber.Position = UDim2.new(0, -8, 0.5, -8)
+scrubber.BackgroundColor3 = Color3.fromRGB(100, 200, 255)
+scrubber.BorderSizePixel = 0
+scrubber.Active = true
+scrubber.Parent = timelineBg
+
+local scrubberCorner = Instance.new("UICorner")
+scrubberCorner.CornerRadius = UDim.new(1, 0)
+scrubberCorner.Parent = scrubber
+
+local generateBtn2 = Instance.new("TextButton")
+generateBtn2.Size = UDim2.new(1, 0, 0, 35)
+generateBtn2.Position = UDim2.new(0, 0, 0, 110)
+generateBtn2.BackgroundColor3 = Color3.fromRGB(60, 180, 100)
+generateBtn2.Text = "⚡ Generate Code (Timeline)"
+generateBtn2.TextColor3 = Color3.fromRGB(255, 255, 255)
+generateBtn2.Font = Enum.Font.GothamBold
+generateBtn2.TextSize = 13
+generateBtn2.BorderSizePixel = 0
+generateBtn2.AutoButtonColor = false
+generateBtn2.Parent = tab2Content
+
+local gen2Corner = Instance.new("UICorner")
+gen2Corner.CornerRadius = UDim.new(0, 6)
+gen2Corner.Parent = generateBtn2
+
+local codeTextBox2 = Instance.new("TextBox")
+codeTextBox2.Size = UDim2.new(1, 0, 0, 60)
+codeTextBox2.Position = UDim2.new(0, 0, 0, 150)
+codeTextBox2.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+codeTextBox2.BorderSizePixel = 0
+codeTextBox2.Text = "Code will appear here..."
+codeTextBox2.TextColor3 = Color3.fromRGB(150, 255, 150)
+codeTextBox2.Font = Enum.Font.Code
+codeTextBox2.TextSize = 10
+codeTextBox2.TextXAlignment = Enum.TextXAlignment.Left
+codeTextBox2.TextYAlignment = Enum.TextYAlignment.Top
+codeTextBox2.MultiLine = true
+codeTextBox2.ClearTextOnFocus = false
+codeTextBox2.TextWrapped = true
+codeTextBox2.Parent = tab2Content
+
+local code2Corner = Instance.new("UICorner")
+code2Corner.CornerRadius = UDim.new(0, 6)
+code2Corner.Parent = codeTextBox2
+
+-- Variables
+local isFrozen = false
+local savedKeyframes = {}
+local keyframeCount = 0
+local currentTab = 1
+local loadedAnimTrack = nil
+local animLength = 1
+local currentTimePosition = 0
+local frozenTracks = {}
+
+-- Toggle visibility
+toggleVisibilityBtn.MouseButton1Click:Connect(function()
+	mainFrame.Visible = not mainFrame.Visible
+	if mainFrame.Visible then
+		toggleVisibilityBtn.Text = "🎬"
+	else
+		toggleVisibilityBtn.Text = "📂"
+	end
+end)
+
+-- Tab switching
+tab1Btn.MouseButton1Click:Connect(function()
+	tab1Content.Visible = true
+	tab2Content.Visible = false
+	tab1Btn.BackgroundColor3 = Color3.fromRGB(60, 180, 100)
+	tab2Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+	currentTab = 1
+end)
+
+tab2Btn.MouseButton1Click:Connect(function()
+	tab1Content.Visible = false
+	tab2Content.Visible = true
+	tab1Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+	tab2Btn.BackgroundColor3 = Color3.fromRGB(60, 180, 100)
+	currentTab = 2
+end)
+
+-- Freeze toggle (FIXED: Immediate freeze)
+toggleButton.MouseButton1Click:Connect(function()
+	isFrozen = not isFrozen
+	
+	if isFrozen then
+		TweenService:Create(toggleButton, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(60, 200, 120)}):Play()
+		toggleButton.Text = "❄️ Freeze: ON"
+		
+		frozenTracks = {}
+		for _, track in pairs(humanoid:GetPlayingAnimationTracks()) do
+			local currentTime = track.TimePosition
+			table.insert(frozenTracks, {track = track, time = currentTime, speed = track.Speed})
+			track:AdjustSpeed(0)
+		end
+	else
+		TweenService:Create(toggleButton, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(220, 60, 60)}):Play()
+		toggleButton.Text = "❄️ Freeze: OFF"
+		
+		for _, data in pairs(frozenTracks) do
+			if data.track and data.track.IsPlaying then
+				data.track:AdjustSpeed(data.speed)
+			end
+		end
+		frozenTracks = {}
+	end
+end)
+
+-- Save keyframe (FIXED: Stores exact frozen state)
+saveKeyframeButton.MouseButton1Click:Connect(function()
+	local currentAnims = {}
+	
+	if isFrozen and #frozenTracks > 0 then
+		for _, data in pairs(frozenTracks) do
+			table.insert(currentAnims, {
+				track = data.track,
+				animationId = data.track.Animation.AnimationId,
+				timePosition = data.time,
+				speed = data.speed
+			})
+		end
+	else
+		for _, track in pairs(humanoid:GetPlayingAnimationTracks()) do
+			table.insert(currentAnims, {
+				track = track,
+				animationId = track.Animation.AnimationId,
+				timePosition = track.TimePosition,
+				speed = track.Speed
+			})
+		end
+	end
+	
+	if #currentAnims == 0 then
+		codeTextBox.Text = "⚠️ No animations playing!"
+		return
+	end
+	
+	keyframeCount = keyframeCount + 1
+	
+	table.insert(savedKeyframes, {
+		id = keyframeCount,
+		animations = currentAnims
+	})
+	
+	local keyframeButton = Instance.new("TextButton")
+	keyframeButton.Name = "Keyframe" .. keyframeCount
+	keyframeButton.Size = UDim2.new(1, -8, 0, 28)
+	keyframeButton.BackgroundColor3 = Color3.fromRGB(60, 60, 75)
+	keyframeButton.Text = string.format("🎯 #%d (%.2fs)", keyframeCount, currentAnims[1].timePosition)
+	keyframeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	keyframeButton.Font = Enum.Font.Gotham
+	keyframeButton.TextSize = 11
+	keyframeButton.BorderSizePixel = 0
+	keyframeButton.AutoButtonColor = false
+	keyframeButton.LayoutOrder = keyframeCount
+	keyframeButton.Parent = keyframesScrollFrame
+	
+	local keyCorner = Instance.new("UICorner")
+	keyCorner.CornerRadius = UDim.new(0, 5)
+	keyCorner.Parent = keyframeButton
+	
+	local deleteBtn = Instance.new("TextButton")
+	deleteBtn.Size = UDim2.new(0, 24, 0, 24)
+	deleteBtn.Position = UDim2.new(1, -26, 0.5, -12)
+	deleteBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+	deleteBtn.Text = "×"
+	deleteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	deleteBtn.Font = Enum.Font.GothamBold
+	deleteBtn.TextSize = 14
+	deleteBtn.BorderSizePixel = 0
+	deleteBtn.Parent = keyframeButton
+	
+	local delCorner = Instance.new("UICorner")
+	delCorner.CornerRadius = UDim.new(0, 5)
+	delCorner.Parent = deleteBtn
+	
+	local keyframeId = keyframeCount
+	deleteBtn.MouseButton1Click:Connect(function()
+		for i, kf in ipairs(savedKeyframes) do
+			if kf.id == keyframeId then
+				table.remove(savedKeyframes, i)
+				break
+			end
+		end
+		keyframeButton:Destroy()
+	end)
+	
+	keyframesScrollFrame.CanvasSize = UDim2.new(0, 0, 0, keyframesLayout.AbsoluteContentSize.Y + 8)
+	codeTextBox.Text = "✅ Keyframe #" .. keyframeCount .. " saved!"
+end)
+
+-- Generate code (FIXED: Uses stored time positions)
+generateButton.MouseButton1Click:Connect(function()
+	if #savedKeyframes == 0 then
+		codeTextBox.Text = "⚠️ No keyframes saved!"
+		return
+	end
+	
+	local code = "-- Animation Sequence Code\n"
+	code = code .. "local hum = game.Players.LocalPlayer.Character:WaitForChild('Humanoid')\n\n"
+	
+	for i, keyframe in ipairs(savedKeyframes) do
+		for j, animData in ipairs(keyframe.animations) do
+			code = code .. string.format("local anim%d = Instance.new('Animation')\n", i)
+			code = code .. string.format("anim%d.AnimationId = '%s'\n", i, animData.animationId)
+			code = code .. string.format("local track%d = hum:LoadAnimation(anim%d)\n", i, i)
+			code = code .. string.format("track%d:Play()\n", i)
+			code = code .. string.format("track%d.TimePosition = %.3f\n", i, animData.timePosition)
+			code = code .. string.format("track%d:AdjustSpeed(0)\n\n", i)
+		end
+	end
+	
+	codeTextBox.Text = code
+end)
+
+-- Timeline scrubber dragging
+local scrubberDragging = false
+
+scrubber.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		scrubberDragging = true
+	end
+end)
+
+scrubber.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		scrubberDragging = false
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if scrubberDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		local relativeX = input.Position.X - timelineBg.AbsolutePosition.X
+		local percent = math.clamp(relativeX / timelineBg.AbsoluteSize.X, 0, 1)
+		
+		scrubber.Position = UDim2.new(percent, -8, 0.5, -8)
+		currentTimePosition = percent * animLength
+		timelineLabel.Text = string.format("Timeline: %.2fs", currentTimePosition)
+		
+		if loadedAnimTrack then
+			loadedAnimTrack.TimePosition = currentTimePosition
+		end
+	end
+end)
+
+-- Load animation
+loadAnimBtn.MouseButton1Click:Connect(function()
+	local animId = animIdBox.Text
+	if animId == "" then
+		codeTextBox2.Text = "⚠️ Enter an animation ID!"
+		return
+	end
+	
+	if loadedAnimTrack then
+		loadedAnimTrack:Stop()
+	end
+	
+	local anim = Instance.new("Animation")
+	anim.AnimationId = animId
+	
+	loadedAnimTrack = humanoid:LoadAnimation(anim)
+	loadedAnimTrack:Play()
+	loadedAnimTrack:AdjustSpeed(0)
+	
+	animLength = loadedAnimTrack.Length
+	currentTimePosition = 0
+	scrubber.Position = UDim2.new(0, -8, 0.5, -8)
+	timelineLabel.Text = string.format("Timeline: 0.00s / %.2fs", animLength)
+	
+	codeTextBox2.Text = "✅ Animation loaded!"
+end)
+
+-- Generate timeline code
+generateBtn2.MouseButton1Click:Connect(function()
+	if not loadedAnimTrack then
+		codeTextBox2.Text = "⚠️ Load an animation first!"
+		return
+	end
+	
+	local code = string.format([[
+-- Timeline Animation Code
+local hum = game.Players.LocalPlayer.Character:WaitForChild('Humanoid')
+local anim = Instance.new('Animation')
+anim.AnimationId = '%s'
+local track = hum:LoadAnimation(anim)
+track:Play()
+track.TimePosition = %.3f
+track:AdjustSpeed(0)
+]], loadedAnimTrack.Animation.AnimationId, currentTimePosition)
+	
+	codeTextBox2.Text = code
+end)
+
+keyframesLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	keyframesScrollFrame.CanvasSize = UDim2.new(0, 0, 0, keyframesLayout.AbsoluteContentSize.Y + 8)
+end)
+
+print("✅ Tabbed Animation Freezer GUI loaded!")
