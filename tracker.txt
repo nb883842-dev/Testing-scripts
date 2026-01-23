@@ -1,4 +1,4 @@
--- Tabbed Animation Freezer LocalScript
+-- Animation Freezer GUI - Complete Script
 -- Place this in StarterPlayer > StarterPlayerScripts or StarterGui
 
 local Players = game:GetService("Players")
@@ -15,7 +15,7 @@ screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
--- Hide/Show toggle button (always visible)
+-- Hide/Show toggle button
 local toggleVisibilityBtn = Instance.new("TextButton")
 toggleVisibilityBtn.Name = "ToggleVisibility"
 toggleVisibilityBtn.Size = UDim2.new(0, 50, 0, 50)
@@ -32,7 +32,7 @@ local toggleCorner = Instance.new("UICorner")
 toggleCorner.CornerRadius = UDim.new(0, 10)
 toggleCorner.Parent = toggleVisibilityBtn
 
--- Main draggable Frame (rectangle shape)
+-- Main Frame
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
 mainFrame.Size = UDim2.new(0, 450, 0, 300)
@@ -87,7 +87,6 @@ tabContainer.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 tabContainer.BorderSizePixel = 0
 tabContainer.Parent = mainFrame
 
--- Tab buttons
 local tab1Btn = Instance.new("TextButton")
 tab1Btn.Name = "Tab1"
 tab1Btn.Size = UDim2.new(0.5, -2, 1, 0)
@@ -261,7 +260,6 @@ local loadCorner = Instance.new("UICorner")
 loadCorner.CornerRadius = UDim.new(0, 6)
 loadCorner.Parent = loadAnimBtn
 
--- Timeline scrubber
 local timelineLabel = Instance.new("TextLabel")
 timelineLabel.Size = UDim2.new(1, 0, 0, 20)
 timelineLabel.Position = UDim2.new(0, 0, 0, 65)
@@ -274,32 +272,42 @@ timelineLabel.TextXAlignment = Enum.TextXAlignment.Left
 timelineLabel.Parent = tab2Content
 
 local timelineBg = Instance.new("Frame")
-timelineBg.Size = UDim2.new(1, 0, 0, 8)
+timelineBg.Size = UDim2.new(1, 0, 0, 30)
 timelineBg.Position = UDim2.new(0, 0, 0, 90)
 timelineBg.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 timelineBg.BorderSizePixel = 0
 timelineBg.Parent = tab2Content
 
 local timelineCorner = Instance.new("UICorner")
-timelineCorner.CornerRadius = UDim.new(0, 4)
+timelineCorner.CornerRadius = UDim.new(0, 15)
 timelineCorner.Parent = timelineBg
 
 local scrubber = Instance.new("Frame")
 scrubber.Name = "Scrubber"
-scrubber.Size = UDim2.new(0, 16, 0, 16)
-scrubber.Position = UDim2.new(0, -8, 0.5, -8)
+scrubber.Size = UDim2.new(0, 32, 0, 32)
+scrubber.Position = UDim2.new(0, -16, 0.5, -16)
 scrubber.BackgroundColor3 = Color3.fromRGB(100, 200, 255)
 scrubber.BorderSizePixel = 0
 scrubber.Active = true
+scrubber.ZIndex = 2
 scrubber.Parent = timelineBg
 
 local scrubberCorner = Instance.new("UICorner")
 scrubberCorner.CornerRadius = UDim.new(1, 0)
 scrubberCorner.Parent = scrubber
 
+local scrubberHitbox = Instance.new("Frame")
+scrubberHitbox.Name = "Hitbox"
+scrubberHitbox.Size = UDim2.new(1, 20, 1, 20)
+scrubberHitbox.Position = UDim2.new(0, -10, 0, -10)
+scrubberHitbox.BackgroundTransparency = 1
+scrubberHitbox.Active = true
+scrubberHitbox.ZIndex = 3
+scrubberHitbox.Parent = scrubber
+
 local generateBtn2 = Instance.new("TextButton")
 generateBtn2.Size = UDim2.new(0.48, 0, 0, 35)
-generateBtn2.Position = UDim2.new(0, 0, 0, 120)
+generateBtn2.Position = UDim2.new(0, 0, 0, 130)
 generateBtn2.BackgroundColor3 = Color3.fromRGB(60, 180, 100)
 generateBtn2.Text = "⚡ Generate Code"
 generateBtn2.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -315,7 +323,7 @@ gen2Corner.Parent = generateBtn2
 
 local saveKeyframe2Btn = Instance.new("TextButton")
 saveKeyframe2Btn.Size = UDim2.new(0.48, 0, 0, 35)
-saveKeyframe2Btn.Position = UDim2.new(0.52, 0, 0, 120)
+saveKeyframe2Btn.Position = UDim2.new(0.52, 0, 0, 130)
 saveKeyframe2Btn.BackgroundColor3 = Color3.fromRGB(100, 120, 255)
 saveKeyframe2Btn.Text = "💾 Save Keyframe"
 saveKeyframe2Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -330,8 +338,8 @@ saveKey2Corner.CornerRadius = UDim.new(0, 6)
 saveKey2Corner.Parent = saveKeyframe2Btn
 
 local codeTextBox2 = Instance.new("TextBox")
-codeTextBox2.Size = UDim2.new(1, 0, 0, 60)
-codeTextBox2.Position = UDim2.new(0, 0, 0, 160)
+codeTextBox2.Size = UDim2.new(1, 0, 0, 50)
+codeTextBox2.Position = UDim2.new(0, 0, 0, 170)
 codeTextBox2.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 codeTextBox2.BorderSizePixel = 0
 codeTextBox2.Text = "Code will appear here..."
@@ -362,11 +370,7 @@ local frozenTracks = {}
 -- Toggle visibility
 toggleVisibilityBtn.MouseButton1Click:Connect(function()
 	mainFrame.Visible = not mainFrame.Visible
-	if mainFrame.Visible then
-		toggleVisibilityBtn.Text = "🎬"
-	else
-		toggleVisibilityBtn.Text = "📂"
-	end
+	toggleVisibilityBtn.Text = mainFrame.Visible and "🎬" or "📂"
 end)
 
 -- Tab switching
@@ -386,7 +390,23 @@ tab2Btn.MouseButton1Click:Connect(function()
 	currentTab = 2
 end)
 
--- Freeze toggle (FIXED: Immediate freeze)
+-- Button hover effects
+local function addHoverEffect(button, normalColor, hoverColor)
+	button.MouseEnter:Connect(function()
+		TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = hoverColor}):Play()
+	end)
+	button.MouseLeave:Connect(function()
+		TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = normalColor}):Play()
+	end)
+end
+
+addHoverEffect(toggleButton, Color3.fromRGB(220, 60, 60), Color3.fromRGB(240, 80, 80))
+addHoverEffect(saveKeyframeButton, Color3.fromRGB(100, 120, 255), Color3.fromRGB(120, 140, 255))
+addHoverEffect(generateButton, Color3.fromRGB(60, 180, 100), Color3.fromRGB(80, 200, 120))
+addHoverEffect(generateBtn2, Color3.fromRGB(60, 180, 100), Color3.fromRGB(80, 200, 120))
+addHoverEffect(saveKeyframe2Btn, Color3.fromRGB(100, 120, 255), Color3.fromRGB(120, 140, 255))
+
+-- Freeze toggle
 toggleButton.MouseButton1Click:Connect(function()
 	isFrozen = not isFrozen
 	
@@ -413,7 +433,7 @@ toggleButton.MouseButton1Click:Connect(function()
 	end
 end)
 
--- Save keyframe (FIXED: Stores exact frozen state)
+-- Save keyframe (Tab 1)
 saveKeyframeButton.MouseButton1Click:Connect(function()
 	local currentAnims = {}
 	
@@ -492,11 +512,14 @@ saveKeyframeButton.MouseButton1Click:Connect(function()
 		keyframeButton:Destroy()
 	end)
 	
+	addHoverEffect(keyframeButton, Color3.fromRGB(60, 60, 75), Color3.fromRGB(80, 80, 95))
+	addHoverEffect(deleteBtn, Color3.fromRGB(200, 60, 60), Color3.fromRGB(220, 80, 80))
+	
 	keyframesScrollFrame.CanvasSize = UDim2.new(0, 0, 0, keyframesLayout.AbsoluteContentSize.Y + 8)
 	codeTextBox.Text = "✅ Keyframe #" .. keyframeCount .. " saved!"
 end)
 
--- Generate code (FIXED: Uses stored time positions)
+-- Generate code (Tab 1)
 generateButton.MouseButton1Click:Connect(function()
 	if #savedKeyframes == 0 then
 		codeTextBox.Text = "⚠️ No keyframes saved!"
@@ -523,15 +546,31 @@ end)
 -- Timeline scrubber dragging
 local scrubberDragging = false
 
-scrubber.InputBegan:Connect(function(input)
+scrubberHitbox.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		scrubberDragging = true
 	end
 end)
 
-scrubber.InputEnded:Connect(function(input)
+UserInputService.InputEnded:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		scrubberDragging = false
+	end
+end)
+
+timelineBg.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		scrubberDragging = true
+		local relativeX = input.Position.X - timelineBg.AbsolutePosition.X
+		local percent = math.clamp(relativeX / timelineBg.AbsoluteSize.X, 0, 1)
+		
+		scrubber.Position = UDim2.new(percent, -16, 0.5, -16)
+		currentTimePosition = percent * animLength
+		timelineLabel.Text = string.format("Timeline: %.2fs / %.2fs", currentTimePosition, animLength)
+		
+		if loadedAnimTrack then
+			loadedAnimTrack.TimePosition = currentTimePosition
+		end
 	end
 end)
 
@@ -540,9 +579,9 @@ UserInputService.InputChanged:Connect(function(input)
 		local relativeX = input.Position.X - timelineBg.AbsolutePosition.X
 		local percent = math.clamp(relativeX / timelineBg.AbsoluteSize.X, 0, 1)
 		
-		scrubber.Position = UDim2.new(percent, -8, 0.5, -8)
+		scrubber.Position = UDim2.new(percent, -16, 0.5, -16)
 		currentTimePosition = percent * animLength
-		timelineLabel.Text = string.format("Timeline: %.2fs", currentTimePosition)
+		timelineLabel.Text = string.format("Timeline: %.2fs / %.2fs", currentTimePosition, animLength)
 		
 		if loadedAnimTrack then
 			loadedAnimTrack.TimePosition = currentTimePosition
@@ -552,29 +591,50 @@ end)
 
 -- Load animation
 loadAnimBtn.MouseButton1Click:Connect(function()
-	local animId = animIdBox.Text
+	local animId = animIdBox.Text:gsub("%s+", "")
 	if animId == "" then
 		codeTextBox2.Text = "⚠️ Enter an animation ID!"
 		return
 	end
 	
+	local numbersOnly = animId:match("%d+")
+	if not numbersOnly then
+		codeTextBox2.Text = "⚠️ Invalid ID format! Use numbers only."
+		return
+	end
+	
+	animId = "http://www.roblox.com/asset/?id=" .. numbersOnly
+	
 	if loadedAnimTrack then
 		loadedAnimTrack:Stop()
+		loadedAnimTrack = nil
 	end
 	
 	local anim = Instance.new("Animation")
 	anim.AnimationId = animId
 	
-	loadedAnimTrack = humanoid:LoadAnimation(anim)
-	loadedAnimTrack:Play()
-	loadedAnimTrack:AdjustSpeed(0)
+	local success, err = pcall(function()
+		loadedAnimTrack = humanoid:LoadAnimation(anim)
+		loadedAnimTrack:Play()
+		loadedAnimTrack:AdjustSpeed(0)
+		loadedAnimTrack.TimePosition = 0
+	end)
 	
-	animLength = loadedAnimTrack.Length
-	currentTimePosition = 0
-	scrubber.Position = UDim2.new(0, -8, 0.5, -8)
-	timelineLabel.Text = string.format("Timeline: 0.00s / %.2fs", animLength)
-	
-	codeTextBox2.Text = "✅ Animation loaded!"
+	if success and loadedAnimTrack then
+		wait(0.1)
+		animLength = loadedAnimTrack.Length
+		if animLength == 0 or animLength == nil then
+			animLength = 10
+		end
+		
+		currentTimePosition = 0
+		scrubber.Position = UDim2.new(0, -16, 0.5, -16)
+		timelineLabel.Text = string.format("Timeline: 0.00s / %.2fs", animLength)
+		codeTextBox2.Text = "✅ Animation loaded! Drag the dot to scrub through frames."
+	else
+		codeTextBox2.Text = "⚠️ Failed to load animation. Check the ID!"
+		loadedAnimTrack = nil
+	end
 end)
 
 -- Save keyframe from timeline (Tab 2)
@@ -639,6 +699,9 @@ saveKeyframe2Btn.MouseButton1Click:Connect(function()
 		keyframeButton:Destroy()
 	end)
 	
+	addHoverEffect(keyframeButton, Color3.fromRGB(60, 60, 75), Color3.fromRGB(80, 80, 95))
+	addHoverEffect(deleteBtn, Color3.fromRGB(200, 60, 60), Color3.fromRGB(220, 80, 80))
+	
 	keyframesScrollFrame.CanvasSize = UDim2.new(0, 0, 0, keyframesLayout.AbsoluteContentSize.Y + 8)
 	codeTextBox2.Text = "✅ Keyframe #" .. keyframeCount .. " saved at " .. string.format("%.2fs", currentTimePosition) .. "!"
 end)
@@ -662,8 +725,35 @@ generateBtn2.MouseButton1Click:Connect(function()
 	codeTextBox2.Text = code
 end)
 
+-- Update canvas size
 keyframesLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 	keyframesScrollFrame.CanvasSize = UDim2.new(0, 0, 0, keyframesLayout.AbsoluteContentSize.Y + 8)
 end)
 
-print("✅ Tabbed Animation Freezer GUI loaded!")
+-- Character respawn handler
+player.CharacterAdded:Connect(function(char)
+	character = char
+	humanoid = character:WaitForChild("Humanoid")
+	isFrozen = false
+	savedKeyframes = {}
+	keyframeCount = 0
+	frozenTracks = {}
+	
+	for _, child in ipairs(keyframesScrollFrame:GetChildren()) do
+		if child:IsA("TextButton") then
+			child:Destroy()
+		end
+	end
+	
+	toggleButton.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+	toggleButton.Text = "❄️ Freeze: OFF"
+	codeTextBox.Text = "Code will appear here..."
+	codeTextBox2.Text = "Code will appear here..."
+	
+	if loadedAnimTrack then
+		loadedAnimTrack:Stop()
+		loadedAnimTrack = nil
+	end
+end)
+
+print("✅ Animation Freezer GUI loaded successfully!")
