@@ -520,7 +520,6 @@ saveKeyframeButton.MouseButton1Click:Connect(function()
 end)
 
 -- Generate code (Tab 1) - FIXED VERSION
--- Generate code (Tab 1) - FIXED VERSION
 generateButton.MouseButton1Click:Connect(function()
 	if #savedKeyframes == 0 then
 		codeTextBox.Text = "⚠️ No keyframes saved!"
@@ -542,7 +541,9 @@ generateButton.MouseButton1Click:Connect(function()
 			code = code .. string.format("local track%d = animator:LoadAnimation(anim%d)\n", i, i)
 			code = code .. string.format("track%d:Play()\n", i)
 			code = code .. string.format("track%d:AdjustSpeed(0)\n", i)
-			code = code .. string.format("track%d.TimePosition = %.3f\n\n", i, animData.timePosition)
+			code = code .. string.format("wait(0.1)\n")
+			code = code .. string.format("track%d.TimePosition = %.3f\n", i, animData.timePosition)
+			code = code .. string.format("track%d:AdjustSpeed(0)\n\n", i)
 		end
 	end
 	
@@ -766,3 +767,4 @@ player.CharacterAdded:Connect(function(char)
 	end
 
 end)
+
