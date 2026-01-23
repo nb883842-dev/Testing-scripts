@@ -706,12 +706,15 @@ saveKeyframe2Btn.MouseButton1Click:Connect(function()
 	codeTextBox2.Text = "✅ Keyframe #" .. keyframeCount .. " saved at " .. string.format("%.2fs", currentTimePosition) .. "!"
 end)
 
--- Generate timeline code
+-- Generate timeline code (FIXED VERSION)
 generateBtn2.MouseButton1Click:Connect(function()
 	if not loadedAnimTrack then
 		codeTextBox2.Text = "⚠️ Load an animation first!"
 		return
 	end
+	
+	-- Use the actual TimePosition from the loaded track instead of currentTimePosition variable
+	local actualTimePosition = loadedAnimTrack.TimePosition
 	
 	local code = "-- Timeline Animation Code\n"
 	code = code .. "local hum = game.Players.LocalPlayer.Character:WaitForChild('Humanoid')\n"
@@ -719,7 +722,7 @@ generateBtn2.MouseButton1Click:Connect(function()
 	code = code .. string.format("anim.AnimationId = '%s'\n", loadedAnimTrack.Animation.AnimationId)
 	code = code .. "local track = hum:LoadAnimation(anim)\n"
 	code = code .. "track:Play()\n"
-	code = code .. string.format("track.TimePosition = %.3f\n", currentTimePosition)
+	code = code .. string.format("track.TimePosition = %.3f\n", actualTimePosition)
 	code = code .. "track:AdjustSpeed(0) -- Frozen\n"
 	
 	codeTextBox2.Text = code
@@ -755,5 +758,6 @@ player.CharacterAdded:Connect(function(char)
 		loadedAnimTrack = nil
 	end
 end)
+
 
 print("✅ Animation Freezer GUI loaded successfully!")
