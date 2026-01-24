@@ -134,7 +134,7 @@ local function createMinecraftButton(name, text, position, size, parent)
 		rightBorder.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
 	end)
 	
-		button.MouseEnter:Connect(function()
+	button.MouseEnter:Connect(function()
 		button.BackgroundColor3 = Color3.fromRGB(145, 145, 145)
 	end)
 	
@@ -235,7 +235,7 @@ local settingsButton = createMinecraftButton(
 local hideButton = createMinecraftButton(
 	"HideButton",
 	"👁 Hide UI",
-	UDim2.new(0, 0, 0, isMobile and 75 : 80),
+	UDim2.new(0, 0, 0, isMobile and 75 or 80),
 	UDim2.new(1, 0, 0, isMobile and 55 or 60),
 	buttonsContainer
 )
@@ -514,7 +514,7 @@ end)
 -- Hide UI button
 hideButton.MouseButton1Click:Connect(function()
 	uiVisible = false
-	mainMenu:TweenPosition(UDim2.new(0, -300, 0.5, -200), "Out", "Quad", 0.3, true)
+	mainMenu:TweenPosition(UDim2.new(0, -300, 0.5, -200), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
 	hamburgerButton.Visible = false
 	settingsPanel.Visible = false
 	toggleBlur(false)
@@ -530,9 +530,8 @@ end)
 -- Double-tap screen to show UI again (mobile)
 if isMobile then
 	local lastTapTime = 0
-	local tapConnection
 	
-	tapConnection = UserInputService.TouchTap:Connect(function()
+	UserInputService.TouchTap:Connect(function()
 		local currentTime = tick()
 		if not uiVisible and (currentTime - lastTapTime) < 0.3 then
 			uiVisible = true
@@ -574,7 +573,6 @@ local function toggleTextureRemoval(enabled)
 			end
 		end
 	else
-	
 		for obj, data in pairs(originalTextures) do
 			if obj and obj.Parent then
 				if obj:IsA("BasePart") or obj:IsA("MeshPart") then
