@@ -1,0 +1,695 @@
+-- LocalScript - Place this in StarterPlayer > StarterCharacterScripts
+
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+-- Book state
+local isOpen = false
+local bookModel = nil
+local updateConnection = nil
+local tool = nil
+local isEquipped = false
+local deathNoteUI = nil
+
+-- Selected death info
+local selectedMethod = nil
+local selectedTime = nil
+local selectedPlayer = nil
+
+-- Book dimensions
+local pageWidth = 1.2
+local pageThickness = 0.04
+local pageHeight = 1.6
+local coverThickness = 0.08
+local spineWidth = 0.15
+
+-- Create the tool
+local function createTool()
+	local newTool = Instance.new("Tool")
+	newTool.Name = "Black Book"
+	newTool.RequiresHandle = true
+	newTool.CanBeDropped = false
+	
+	-- Invisible handle
+	local handlePart = Instance.new("Part")
+	handlePart.Name = "Handle"
+	handlePart.Size = Vector3.new(0.2, 0.2, 0.2)
+	handlePart.Transparency = 1
+	handlePart.Massless = true
+	handlePart.CanCollide = false
+	handlePart.Parent = newTool
+	
+	return newTool
+end
+
+-- Create Death Note UI
+local function createDeathNoteUI()
+	if deathNoteUI then
+		deathNoteUI:Destroy()
+	end
+	
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = "DeathNoteUI"
+	screenGui.ResetOnSpawn = false
+	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	screenGui.Parent = player.PlayerGui
+	
+	-- Main Frame (Death Note styled) - Compact and mobile-friendly
+	local mainFrame = Instance.new("Frame")
+	mainFrame.Name = "MainFrame"
+	mainFrame.Size = UDim2.new(0, 320, 0, 450)
+	mainFrame.Position = UDim2.new(0.5, -160, 0.5, -225)
+	mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+	mainFrame.BorderSizePixel = 0
+	mainFrame.Visible = false
+	mainFrame.Parent = screenGui
+	
+	-- Shadow/border effect
+	local shadow = Instance.new("UIStroke")
+	shadow.Color = Color3.fromRGB(80, 80, 80)
+	shadow.Thickness = 2
+	shadow.Parent = mainFrame
+	
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = mainFrame
+	
+	-- Make draggable
+	local dragging = false
+	local dragInput = nil
+	local dragStart = nil
+	local startPos = nil
+	
+	local function update(input)
+		local delta = input.Position - dragStart
+		mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	end
+	
+	mainFrame.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = mainFrame.Position
+			
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+	
+	mainFrame.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			dragInput = input
+		end
+	end)
+	
+	UserInputService.InputChanged:Connect(function(input)
+		if input == dragInput and dragging then
+			update(input)
+		end
+	end)
+	
+	-- Title bar (Death Note style)
+	local titleBar = Instance.new("TextLabel")
+	titleBar.Size = UDim2.new(1, 0, 0, 35)
+	titleBar.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+	titleBar.BorderSizePixel = 0
+	titleBar.Font = Enum.Font.GothamBold
+	titleBar.Text = "DEATH NOTE"
+	titleBar.TextColor3 = Color3.fromRGB(200, 0, 0)
+	titleBar.TextSize = 20
+	titleBar.TextStrokeTransparency = 0.7
+	titleBar.Parent = mainFrame
+	
+	local titleCorner = Instance.new("UICorner")
+	titleCorner.CornerRadius = UDim.new(0, 8)
+	titleCorner.Parent = titleBar
+	
+	-- Paper section (aged paper look)
+	local paperBg = Instance.new("Frame")
+	paperBg.Name = "Paper"
+	paperBg.Size = UDim2.new(1, -16, 0, 165)
+	paperBg.Position = UDim2.new(0, 8, 0, 43)
+	paperBg.BackgroundColor3 = Color3.fromRGB(250, 245, 235)
+	paperBg.BorderSizePixel = 0
+	paperBg.Parent = mainFrame
+	
+	local paperCorner = Instance.new("UICorner")
+	paperCorner.CornerRadius = UDim.new(0, 4)
+	paperCorner.Parent = paperBg
+	
+	-- Name textbox (handwritten style)
+	local nameBox = Instance.new("TextBox")
+	nameBox.Name = "NameBox"
+	nameBox.Size = UDim2.new(0.92, 0, 0, 32)
+	nameBox.Position = UDim2.new(0.04, 0, 0, 8)
+	nameBox.BackgroundColor3 = Color3.fromRGB(245, 240, 230)
+	nameBox.BorderColor3 = Color3.fromRGB(0, 0, 0)
+	nameBox.BorderSizePixel = 1
+	nameBox.Font = Enum.Font.SourceSans
+	nameBox.PlaceholderText = "Write a name..."
+	nameBox.Text = ""
+	nameBox.TextColor3 = Color3.fromRGB(0, 0, 0)
+	nameBox.TextSize = 15
+	nameBox.ClearTextOnFocus = false
+	nameBox.Parent = paperBg
+	
+	-- Toggle button (compact)
+	local toggleBtn = Instance.new("TextButton")
+	toggleBtn.Name = "ToggleButton"
+	toggleBtn.Size = UDim2.new(0.92, 0, 0, 26)
+	toggleBtn.Position = UDim2.new(0.04, 0, 0, 46)
+	toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	toggleBtn.BorderSizePixel = 0
+	toggleBtn.Font = Enum.Font.GothamSemibold
+	toggleBtn.Text = "▼ Methods"
+	toggleBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+	toggleBtn.TextSize = 13
+	toggleBtn.Parent = paperBg
+	
+	local toggleCorner = Instance.new("UICorner")
+	toggleCorner.CornerRadius = UDim.new(0, 4)
+	toggleCorner.Parent = toggleBtn
+	
+	-- Death methods container (compact)
+	local methodsContainer = Instance.new("Frame")
+	methodsContainer.Name = "MethodsContainer"
+	methodsContainer.Size = UDim2.new(0.92, 0, 0, 140)
+	methodsContainer.Position = UDim2.new(0.04, 0, 0, 78)
+	methodsContainer.BackgroundTransparency = 1
+	methodsContainer.Visible = false
+	methodsContainer.ClipsDescendants = true
+	methodsContainer.Parent = paperBg
+	
+	local methods = {"Heart Attack", "Accident", "Illness", "Suicide"}
+	
+	for i, method in ipairs(methods) do
+		local methodFrame = Instance.new("Frame")
+		methodFrame.Size = UDim2.new(1, 0, 0, 28)
+		methodFrame.Position = UDim2.new(0, 0, 0, (i - 1) * 32)
+		methodFrame.BackgroundTransparency = 1
+		methodFrame.Parent = methodsContainer
+		
+		local methodBtn = Instance.new("TextButton")
+		methodBtn.Size = UDim2.new(0.62, -4, 1, 0)
+		methodBtn.Position = UDim2.new(0, 0, 0, 0)
+		methodBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+		methodBtn.BorderSizePixel = 0
+		methodBtn.Font = Enum.Font.Gotham
+		methodBtn.Text = method
+		methodBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
+		methodBtn.TextSize = 12
+		methodBtn.Parent = methodFrame
+		
+		local methodCorner = Instance.new("UICorner")
+		methodCorner.CornerRadius = UDim.new(0, 3)
+		methodCorner.Parent = methodBtn
+		
+		local timeBox = Instance.new("TextBox")
+		timeBox.Size = UDim2.new(0.38, -4, 1, 0)
+		timeBox.Position = UDim2.new(0.62, 4, 0, 0)
+		timeBox.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+		timeBox.BorderSizePixel = 0
+		timeBox.Font = Enum.Font.Gotham
+		timeBox.PlaceholderText = "Seconds"
+		timeBox.Text = ""
+		timeBox.TextColor3 = Color3.fromRGB(0, 0, 0)
+		timeBox.TextSize = 11
+		timeBox.Parent = methodFrame
+		
+		local timeCorner = Instance.new("UICorner")
+		timeCorner.CornerRadius = UDim.new(0, 3)
+		timeCorner.Parent = timeBox
+		
+		methodBtn.MouseButton1Click:Connect(function()
+			selectedMethod = method
+			selectedTime = tonumber(timeBox.Text) or 5
+			for _, child in pairs(methodsContainer:GetChildren()) do
+				if child:IsA("Frame") then
+					local btn = child:FindFirstChildOfClass("TextButton")
+					if btn then
+						btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+					end
+				end
+			end
+			methodBtn.BackgroundColor3 = Color3.fromRGB(120, 20, 20)
+		end)
+	end
+	
+	toggleBtn.MouseButton1Click:Connect(function()
+		methodsContainer.Visible = not methodsContainer.Visible
+		toggleBtn.Text = methodsContainer.Visible and "▲ Methods" or "▼ Methods"
+	end)
+	
+	-- Player grid (compact)
+	local gridFrame = Instance.new("Frame")
+	gridFrame.Name = "GridFrame"
+	gridFrame.Size = UDim2.new(1, -16, 0, 195)
+	gridFrame.Position = UDim2.new(0, 8, 0, 216)
+	gridFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+	gridFrame.BorderSizePixel = 0
+	gridFrame.Parent = mainFrame
+	
+	local gridCorner = Instance.new("UICorner")
+	gridCorner.CornerRadius = UDim.new(0, 4)
+	gridCorner.Parent = gridFrame
+	
+	local gridTitle = Instance.new("TextLabel")
+	gridTitle.Size = UDim2.new(1, 0, 0, 24)
+	gridTitle.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+	gridTitle.BorderSizePixel = 0
+	gridTitle.Font = Enum.Font.GothamBold
+	gridTitle.Text = "Select Target"
+	gridTitle.TextColor3 = Color3.fromRGB(200, 0, 0)
+	gridTitle.TextSize = 13
+	gridTitle.Parent = gridFrame
+	
+	local gridTitleCorner = Instance.new("UICorner")
+	gridTitleCorner.CornerRadius = UDim.new(0, 4)
+	gridTitleCorner.Parent = gridTitle
+	
+	local scrollFrame = Instance.new("ScrollingFrame")
+	scrollFrame.Size = UDim2.new(1, -8, 1, -64)
+	scrollFrame.Position = UDim2.new(0, 4, 0, 28)
+	scrollFrame.BackgroundTransparency = 1
+	scrollFrame.BorderSizePixel = 0
+	scrollFrame.ScrollBarThickness = 3
+	scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+	scrollFrame.Parent = gridFrame
+	
+	-- Populate players (no names shown)
+	local function updatePlayerGrid()
+		for _, child in pairs(scrollFrame:GetChildren()) do
+			if child:IsA("TextButton") or child:IsA("UIGridLayout") then
+				child:Destroy()
+			end
+		end
+		
+		local gridLayout = Instance.new("UIGridLayout")
+		gridLayout.CellSize = UDim2.new(0, 65, 0, 85)
+		gridLayout.CellPadding = UDim2.new(0, 4, 0, 4)
+		gridLayout.SortOrder = Enum.SortOrder.Name
+		gridLayout.Parent = scrollFrame
+		
+		local playerCount = 0
+		for _, plr in pairs(Players:GetPlayers()) do
+			if plr ~= player then
+				playerCount = playerCount + 1
+				local playerBtn = Instance.new("TextButton")
+				playerBtn.Size = UDim2.new(0, 65, 0, 85)
+				playerBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+				playerBtn.BorderSizePixel = 0
+				playerBtn.Text = ""
+				playerBtn.Parent = scrollFrame
+				
+				local btnCorner = Instance.new("UICorner")
+				btnCorner.CornerRadius = UDim.new(0, 6)
+				btnCorner.Parent = playerBtn
+				
+				local avatar = Instance.new("ImageLabel")
+				avatar.Size = UDim2.new(1, -8, 1, -8)
+				avatar.Position = UDim2.new(0, 4, 0, 4)
+				avatar.BackgroundTransparency = 1
+				avatar.Image = Players:GetUserThumbnailAsync(plr.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
+				avatar.Parent = playerBtn
+				
+				local avatarCorner = Instance.new("UICorner")
+				avatarCorner.CornerRadius = UDim.new(0, 4)
+				avatarCorner.Parent = avatar
+				
+				playerBtn.MouseButton1Click:Connect(function()
+					selectedPlayer = plr
+					for _, child in pairs(scrollFrame:GetChildren()) do
+						if child:IsA("TextButton") then
+							child.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+						end
+					end
+					playerBtn.BackgroundColor3 = Color3.fromRGB(120, 20, 20)
+				end)
+			end
+		end
+		
+		-- Update canvas size
+		local rows = math.ceil(playerCount / 4)
+		scrollFrame.CanvasSize = UDim2.new(0, 0, 0, rows * 89)
+	end
+	
+	updatePlayerGrid()
+	Players.PlayerAdded:Connect(updatePlayerGrid)
+	Players.PlayerRemoving:Connect(updatePlayerGrid)
+	
+	-- Kill button (Death Note style)
+	local killBtn = Instance.new("TextButton")
+	killBtn.Size = UDim2.new(0, 110, 0, 32)
+	killBtn.Position = UDim2.new(0.5, -55, 1, -36)
+	killBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+	killBtn.BorderSizePixel = 0
+	killBtn.Font = Enum.Font.GothamBold
+	killBtn.Text = "EXECUTE"
+	killBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	killBtn.TextSize = 16
+	killBtn.Parent = gridFrame
+
+	local killCorner = Instance.new("UICorner")
+	killCorner.CornerRadius = UDim.new(0, 6)
+	killCorner.Parent = killBtn
+	
+	-- Local player removal function
+	local function removePlayerLocally(targetPlayer)
+		if not targetPlayer or not targetPlayer.Character then return end
+		
+		-- Hide character
+		local char = targetPlayer.Character
+		for _, part in pairs(char:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.Transparency = 1
+				part.CanCollide = false
+			elseif part:IsA("Decal") then
+				part.Transparency = 1
+			elseif part:IsA("ParticleEmitter") then
+				part.Enabled = false
+			end
+		end
+		
+		-- Remove from leaderboard
+		local leaderstats = targetPlayer:FindFirstChild("leaderstats")
+		if leaderstats then
+			leaderstats:Destroy()
+		end
+		
+		print(targetPlayer.Name, "removed locally via Death Note")
+	end
+	
+	killBtn.MouseButton1Click:Connect(function()
+		if selectedPlayer and selectedMethod and nameBox.Text ~= "" then
+			print("Executing", selectedPlayer.Name, "via", selectedMethod, "in", selectedTime, "seconds")
+			
+			-- Visual feedback
+			killBtn.Text = "WAITING..."
+			killBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 0)
+			
+			task.wait(selectedTime)
+			
+			-- Remove player locally
+			removePlayerLocally(selectedPlayer)
+			
+			-- Reset UI
+			killBtn.Text = "EXECUTE"
+			killBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+			selectedPlayer = nil
+			selectedMethod = nil
+			nameBox.Text = ""
+			updatePlayerGrid()
+		else
+			-- Error feedback
+			killBtn.Text = "INCOMPLETE"
+			killBtn.BackgroundColor3 = Color3.fromRGB(100, 0, 0)
+			task.wait(1)
+			killBtn.Text = "EXECUTE"
+			killBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+		end
+	end)
+	
+	deathNoteUI = screenGui
+	return mainFrame
+end
+
+local function destroyBook()
+	if bookModel and bookModel.Parent then
+		bookModel:Destroy()
+	end
+	bookModel = nil
+end
+
+-- Create the book model
+local function createBook()
+	destroyBook()
+	
+	local book = Instance.new("Model")
+	book.Name = "MagicBook"
+	book.Parent = workspace
+	
+	-- Spine
+	local spine = Instance.new("Part")
+	spine.Name = "Spine"
+	spine.Size = Vector3.new(spineWidth, pageHeight, 0.2)
+	spine.Color = Color3.fromRGB(5, 5, 5)
+	spine.Material = Enum.Material.Fabric
+	spine.Anchored = true
+	spine.CanCollide = false
+	spine.Massless = true
+	spine.Parent = book
+	
+	-- Left Cover
+	local leftCover = Instance.new("Part")
+	leftCover.Name = "LeftCover"
+	leftCover.Size = Vector3.new(pageWidth, pageHeight, coverThickness)
+	leftCover.Color = Color3.fromRGB(20, 20, 20)
+	leftCover.Material = Enum.Material.Fabric
+	leftCover.Anchored = true
+	leftCover.CanCollide = false
+	leftCover.Massless = true
+	leftCover.Parent = book
+	
+	-- Right Cover
+	local rightCover = Instance.new("Part")
+	rightCover.Name = "RightCover"
+	rightCover.Size = Vector3.new(pageWidth, pageHeight, coverThickness)
+	rightCover.Color = Color3.fromRGB(20, 20, 20)
+	rightCover.Material = Enum.Material.Fabric
+	rightCover.Anchored = true
+	rightCover.CanCollide = false
+	rightCover.Massless = true
+	rightCover.Parent = book
+	
+	-- Left Page
+	local leftPage = Instance.new("Part")
+	leftPage.Name = "LeftPage"
+	leftPage.Size = Vector3.new(pageWidth - 0.08, pageHeight - 0.08, pageThickness)
+	leftPage.Color = Color3.fromRGB(250, 240, 230)
+	leftPage.Material = Enum.Material.SmoothPlastic
+	leftPage.Anchored = true
+	leftPage.CanCollide = false
+	leftPage.Massless = true
+	leftPage.Parent = book
+	
+	-- Right Page
+	local rightPage = Instance.new("Part")
+	rightPage.Name = "RightPage"
+	rightPage.Size = Vector3.new(pageWidth - 0.08, pageHeight - 0.08, pageThickness)
+	rightPage.Color = Color3.fromRGB(250, 240, 230)
+	rightPage.Material = Enum.Material.SmoothPlastic
+	rightPage.Anchored = true
+	rightPage.CanCollide = false
+	rightPage.Massless = true
+	rightPage.Parent = book
+	
+	bookModel = book
+	print("Book created!")
+	return book
+end
+
+-- Update book position - PROPER CLOSED STATE
+local function updateBookPosition(openProgress)
+	if not bookModel or not bookModel.Parent then return end
+	if not character or not character.Parent then return end
+	
+	local spine = bookModel:FindFirstChild("Spine")
+	local leftCover = bookModel:FindFirstChild("LeftCover")
+	local rightCover = bookModel:FindFirstChild("RightCover")
+	local leftPage = bookModel:FindFirstChild("LeftPage")
+	local rightPage = bookModel:FindFirstChild("RightPage")
+	
+	if not spine then return end
+	
+	local bookCFrame
+	
+	-- Position based on state
+	if openProgress < 0.01 then
+		-- CLOSED STATE - in hand
+		if isEquipped then
+			local rightArm = character:FindFirstChild("Right Arm") or character:FindFirstChild("RightHand") or character:FindFirstChild("RightLowerArm")
+			if rightArm then
+				bookCFrame = rightArm.CFrame * CFrame.new(0, -0.5, -0.2) * CFrame.Angles(math.rad(-80), 0, 0)
+			else
+				bookCFrame = humanoidRootPart.CFrame * CFrame.new(0.5, -0.3, -0.5) * CFrame.Angles(math.rad(-80), 0, 0)
+			end
+		else
+			-- Not equipped, hide it
+			return
+		end
+	else
+		-- OPEN STATE - floating
+		local dist = 2.5
+		local height = 0.5
+		bookCFrame = humanoidRootPart.CFrame * CFrame.new(0, height, -dist) * CFrame.Angles(math.rad(-35 * openProgress), 0, 0)
+	end
+	
+	-- Opening angle - starts at 0 (closed)
+	local openAngle = math.rad(50 * openProgress)
+	
+	-- Position all parts
+	spine.CFrame = bookCFrame
+	
+	if openProgress < 0.01 then
+		-- CLOSED - Stack covers together, hide pages inside
+		if leftCover then
+			-- Back cover (left) behind spine
+			leftCover.CFrame = bookCFrame * CFrame.new(0, 0, -coverThickness/2 - 0.01)
+		end
+		if rightCover then
+			-- Front cover (right) in front of spine
+			rightCover.CFrame = bookCFrame * CFrame.new(0, 0, coverThickness/2 + 0.01)
+		end
+		if leftPage then
+			-- Left page hidden inside between covers
+			leftPage.CFrame = bookCFrame * CFrame.new(0, 0, -pageThickness/2 - 0.005)
+		end
+		if rightPage then
+			-- Right page hidden inside between covers
+			rightPage.CFrame = bookCFrame * CFrame.new(0, 0, pageThickness/2 + 0.005)
+		end
+	else
+		-- OPEN - Spread covers apart
+		local leftPivot = bookCFrame * CFrame.new(-spineWidth/2, 0, 0)
+		local leftRotated = leftPivot * CFrame.Angles(0, openAngle, 0)
+		
+		if leftCover then
+			leftCover.CFrame = leftRotated * CFrame.new(-pageWidth/2, 0, 0)
+		end
+		if leftPage then
+			leftPage.CFrame = leftRotated * CFrame.new(-pageWidth/2, 0, coverThickness/2 + pageThickness/2 + 0.01)
+		end
+		
+		local rightPivot = bookCFrame * CFrame.new(spineWidth/2, 0, 0)
+		local rightRotated = rightPivot * CFrame.Angles(0, -openAngle, 0)
+		
+		if rightCover then
+			rightCover.CFrame = rightRotated * CFrame.new(pageWidth/2, 0, 0)
+		end
+		if rightPage then
+			rightPage.CFrame = rightRotated * CFrame.new(pageWidth/2, 0, coverThickness/2 + pageThickness/2 + 0.01)
+		end
+	end
+end
+
+-- Animate
+local function animateBook(targetOpen)
+	if updateConnection then
+		updateConnection:Disconnect()
+	end
+	
+	local startProgress = isOpen and 1 or 0
+	local endProgress = targetOpen and 1 or 0
+	local duration = 0.6
+	local elapsed = 0
+	
+	updateConnection = RunService.RenderStepped:Connect(function(dt)
+		elapsed = elapsed + dt
+		local progress = math.min(elapsed / duration, 1)
+		local eased = progress * progress * (3 - 2 * progress)
+		local currentProgress = startProgress + (endProgress - startProgress) * eased
+		
+		updateBookPosition(currentProgress)
+		
+		if progress >= 1 then
+			updateConnection:Disconnect()
+			updateConnection = RunService.RenderStepped:Connect(function()
+				updateBookPosition(endProgress)
+			end)
+		end
+	end)
+end
+
+-- Toggle
+local function toggleBook()
+	if not isEquipped then return end
+	
+	isOpen = not isOpen
+	animateBook(isOpen)
+	
+	-- Toggle UI
+	if deathNoteUI then
+		local mainFrame = deathNoteUI:FindFirstChild("MainFrame")
+		if mainFrame then
+			mainFrame.Visible = isOpen
+		end
+	end
+	
+	print("Book", isOpen and "OPENED" or "CLOSED")
+end
+
+-- Setup
+local function setupTool()
+	tool = createTool()
+	tool.Parent = player:WaitForChild("Backpack")
+	
+	-- Create UI
+	createDeathNoteUI()
+	
+	tool.Equipped:Connect(function()
+		isEquipped = true
+		print("EQUIPPED")
+		
+		-- Always create fresh book on equip
+		createBook()
+		
+		-- Start updating
+		if updateConnection then
+			updateConnection:Disconnect()
+		end
+		updateConnection = RunService.RenderStepped:Connect(function()
+			updateBookPosition(isOpen and 1 or 0)
+		end)
+	end)
+	
+	tool.Unequipped:Connect(function()
+		isEquipped = false
+		print("UNEQUIPPED")
+		
+		-- Stop updates
+		if updateConnection then
+			updateConnection:Disconnect()
+			updateConnection = nil
+		end
+		
+		-- Destroy book
+		destroyBook()
+	end)
+	
+	tool.Activated:Connect(toggleBook)
+end
+
+setupTool()
+
+-- Respawn handler
+player.CharacterAdded:Connect(function(newChar)
+	character = newChar
+	humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+	
+	-- Clean up
+	if updateConnection then
+		updateConnection:Disconnect()
+		updateConnection = nil
+	end
+	destroyBook()
+	if tool then
+		tool:Destroy()
+	end
+	
+	-- Reset
+	isOpen = false
+	isEquipped = false
+	
+	-- Setup again
+	setupTool()
+end)
+
+print("Black Book ready!")
