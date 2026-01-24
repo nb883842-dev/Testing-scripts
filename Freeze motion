@@ -496,7 +496,7 @@ saveKeyframeButton.MouseButton1Click:Connect(function()
 	codeTextBox.Text = "✅ Keyframe #" .. keyframeCount .. " saved!"
 end)
 
--- Generate code (FIXED: Uses stored time positions)
+-- Generate code (Tab 1) - FIXED VERSION
 generateButton.MouseButton1Click:Connect(function()
 	if #savedKeyframes == 0 then
 		codeTextBox.Text = "⚠️ No keyframes saved!"
@@ -505,6 +505,10 @@ generateButton.MouseButton1Click:Connect(function()
 	
 	local code = "-- Animation Sequence Code\n"
 	code = code .. "local hum = game.Players.LocalPlayer.Character:WaitForChild('Humanoid')\n\n"
+	code = code .. "-- Stop all other animations\n"
+	code = code .. "for _, track in pairs(hum:GetPlayingAnimationTracks()) do\n"
+	code = code .. "    track:Stop()\n"
+	code = code .. "end\n\n"
 	
 	for i, keyframe in ipairs(savedKeyframes) do
 		for j, animData in ipairs(keyframe.animations) do
@@ -512,8 +516,9 @@ generateButton.MouseButton1Click:Connect(function()
 			code = code .. string.format("anim%d.AnimationId = '%s'\n", i, animData.animationId)
 			code = code .. string.format("local track%d = hum:LoadAnimation(anim%d)\n", i, i)
 			code = code .. string.format("track%d:Play()\n", i)
-			code = code .. string.format("track%d.TimePosition = %.3f\n", i, animData.timePosition)
-			code = code .. string.format("track%d:AdjustSpeed(0)\n\n", i)
+			code = code .. string.format("task.wait(0.3)\n")
+			code = code .. string.format("track%d:AdjustSpeed(0)\n", i)
+			code = code .. string.format("track%d.TimePosition = %.3f\n\n", i, animData.timePosition)
 		end
 	end
 	
@@ -697,5 +702,6 @@ player.CharacterAdded:Connect(function(char)
 		loadedAnimTrack = nil
 	end
 end)
+
 
 print("✅ Animation Freezer GUI v2 with Fixed Code Generation loaded!")
