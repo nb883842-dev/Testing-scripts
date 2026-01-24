@@ -150,9 +150,7 @@ local function createDeathNoteUI()
 	nameBox.Name = "NameBox"
 	nameBox.Size = UDim2.new(0.92, 0, 0, 32)
 	nameBox.Position = UDim2.new(0.04, 0, 0, 8)
-	nameBox.BackgroundColor3 = Color3.fromRGB(245, 240, 230)
-	nameBox.BorderColor3 = Color3.fromRGB(0, 0, 0)
-	nameBox.BorderSizePixel = 1
+	nameBox.BackgroundTransparency = 1
 	nameBox.Font = Enum.Font.SourceSans
 	nameBox.PlaceholderText = "Write a name..."
 	nameBox.Text = ""
@@ -160,6 +158,14 @@ local function createDeathNoteUI()
 	nameBox.TextSize = 15
 	nameBox.ClearTextOnFocus = false
 	nameBox.Parent = paperBg
+	
+	-- Underline for name box (Death Note style)
+	local nameLine = Instance.new("Frame")
+	nameLine.Size = UDim2.new(0.92, 0, 0, 1)
+	nameLine.Position = UDim2.new(0.04, 0, 0, 40)
+	nameLine.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+	nameLine.BorderSizePixel = 0
+	nameLine.Parent = paperBg
 	
 	-- Toggle button (compact)
 	local toggleBtn = Instance.new("TextButton")
@@ -215,14 +221,21 @@ local function createDeathNoteUI()
 		local timeBox = Instance.new("TextBox")
 		timeBox.Size = UDim2.new(0.38, -4, 1, 0)
 		timeBox.Position = UDim2.new(0.62, 4, 0, 0)
-		timeBox.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
-		timeBox.BorderSizePixel = 0
+		timeBox.BackgroundTransparency = 1
 		timeBox.Font = Enum.Font.Gotham
 		timeBox.PlaceholderText = "Seconds"
 		timeBox.Text = ""
 		timeBox.TextColor3 = Color3.fromRGB(0, 0, 0)
 		timeBox.TextSize = 11
 		timeBox.Parent = methodFrame
+		
+		-- Underline for time box (Death Note style)
+		local timeLine = Instance.new("Frame")
+		timeLine.Size = UDim2.new(0.38, -4, 0, 1)
+		timeLine.Position = UDim2.new(0.62, 4, 1, -1)
+		timeLine.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+		timeLine.BorderSizePixel = 0
+		timeLine.Parent = methodFrame
 		
 		local timeCorner = Instance.new("UICorner")
 		timeCorner.CornerRadius = UDim.new(0, 3)
@@ -242,7 +255,7 @@ local function createDeathNoteUI()
 			methodBtn.BackgroundColor3 = Color3.fromRGB(120, 20, 20)
 		end)
 	end
-	
+
 	toggleBtn.MouseButton1Click:Connect(function()
 		methodsContainer.Visible = not methodsContainer.Visible
 		toggleBtn.Text = methodsContainer.Visible and "▲ Methods" or "▼ Methods"
@@ -356,26 +369,18 @@ local function createDeathNoteUI()
 	killBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	killBtn.TextSize = 16
 	killBtn.Parent = gridFrame
-
+	
 	local killCorner = Instance.new("UICorner")
 	killCorner.CornerRadius = UDim.new(0, 6)
 	killCorner.Parent = killBtn
 	
 	-- Local player removal function
 	local function removePlayerLocally(targetPlayer)
-		if not targetPlayer or not targetPlayer.Character then return end
+		if not targetPlayer then return end
 		
-		-- Hide character
-		local char = targetPlayer.Character
-		for _, part in pairs(char:GetDescendants()) do
-			if part:IsA("BasePart") then
-				part.Transparency = 1
-				part.CanCollide = false
-			elseif part:IsA("Decal") then
-				part.Transparency = 1
-			elseif part:IsA("ParticleEmitter") then
-				part.Enabled = false
-			end
+		-- Completely destroy the character model
+		if targetPlayer.Character then
+			targetPlayer.Character:Destroy()
 		end
 		
 		-- Remove from leaderboard
@@ -384,7 +389,15 @@ local function createDeathNoteUI()
 			leaderstats:Destroy()
 		end
 		
-		print(targetPlayer.Name, "removed locally via Death Note")
+		-- Prevent character from respawning by destroying new characters
+		targetPlayer.CharacterAdded:Connect(function(newChar)
+			task.wait()
+			if newChar and newChar.Parent then
+				newChar:Destroy()
+			end
+		end)
+		
+		print(targetPlayer.Name, "eliminated via Death Note")
 	end
 	
 	killBtn.MouseButton1Click:Connect(function()
