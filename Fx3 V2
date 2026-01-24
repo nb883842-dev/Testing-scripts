@@ -47,13 +47,32 @@ local function loadColorData()
 	
 	if success and result then
 		for name, hex in pairs(result) do
-			local r = tonumber(hex:sub(2, 3), 16)
-			local g = tonumber(hex:sub(4, 5), 16)
-			local b = tonumber(hex:sub(6, 7), 16)
-			if r and g and b then
-				table.insert(colorData, {name = name, color = Color3.fromRGB(r, g, b)})
+			if type(hex) == "string" and #hex >= 6 then
+				local cleanHex = hex:gsub("#", "")
+				local r = tonumber(cleanHex:sub(1, 2), 16)
+				local g = tonumber(cleanHex:sub(3, 4), 16)
+				local b = tonumber(cleanHex:sub(5, 6), 16)
+				if r and g and b then
+					table.insert(colorData, {name = name, color = Color3.fromRGB(r, g, b)})
+				end
 			end
 		end
+	end
+	
+	-- Add fallback colors if loading fails
+	if #colorData == 0 then
+		colorData = {
+			{name = "Red", color = Color3.fromRGB(255, 0, 0)},
+			{name = "Orange", color = Color3.fromRGB(255, 127, 0)},
+			{name = "Yellow", color = Color3.fromRGB(255, 255, 0)},
+			{name = "Green", color = Color3.fromRGB(0, 255, 0)},
+			{name = "Cyan", color = Color3.fromRGB(0, 255, 255)},
+			{name = "Blue", color = Color3.fromRGB(0, 0, 255)},
+			{name = "Purple", color = Color3.fromRGB(127, 0, 255)},
+			{name = "Magenta", color = Color3.fromRGB(255, 0, 255)},
+			{name = "White", color = Color3.fromRGB(255, 255, 255)},
+			{name = "Black", color = Color3.fromRGB(0, 0, 0)}
+		}
 	end
 end
 
@@ -664,7 +683,7 @@ mouse.Button1Down:Connect(function()
 			end
 		end
 		
--- Otherwise select a part
+		-- Otherwise select a part
 		selectPart(target)
 	elseif currentMode == "Copy" then
 		if mouse.Target then
