@@ -559,8 +559,6 @@ end)
 
 UserInputService.InputEnded:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		scrubberDraggUserInputService.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		scrubberDragging = false
 	end
 end)
@@ -767,3 +765,5 @@ player.CharacterAdded:Connect(function(char)
 		loadedAnimTrack = nil
 	end
 end)
+
+print("✅ Animation Freezer GUI v2 loaded successfully!")
