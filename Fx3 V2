@@ -1,0 +1,798 @@
+-- LocalScript - Place this inside StarterPlayer > StarterCharacterScripts or StarterPlayerScripts
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
+local player = Players.LocalPlayer
+local mouse = player:GetMouse()
+
+-- Wait for character
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+
+-- Create the tool
+local tool = Instance.new("Tool")
+tool.Name = "BuildTool"
+tool.RequiresHandle = false
+tool.CanBeDropped = false
+tool.Parent = player.Backpack
+
+-- Variables
+local screenGui
+local mainFrame
+local materialFrame
+local colorFrame
+local currentMode = nil
+local dragging = false
+local dragStart, startPos
+local createdParts = {}
+local selectedPart = nil
+local handles = {}
+local draggingHandle = false
+local handleType = nil
+local renderConnection
+local highlight
+local selectedColor = Color3.fromRGB(255, 0, 0)
+local colorData = {}
+
+-- Multi-touch support
+local activeTouches = {}
+
+-- Load color data
+local function loadColorData()
+	local success, result = pcall(function()
+		return HttpService:JSONDecode(game:HttpGet("https://raw.githubusercontent.com/cheprasov/json-colors/refs/heads/master/colors.json"))
+	end)
+	
+	if success and result then
+		for name, hex in pairs(result) do
+			local r = tonumber(hex:sub(2, 3), 16)
+			local g = tonumber(hex:sub(4, 5), 16)
+			local b = tonumber(hex:sub(6, 7), 16)
+			if r and g and b then
+				table.insert(colorData, {name = name, color = Color3.fromRGB(r, g, b)})
+			end
+		end
+	end
+end
+
+-- Create highlight for selected part
+local function createHighlight()
+	if not highlight then
+		highlight = Instance.new("Highlight")
+		highlight.FillTransparency = 0.5
+		highlight.OutlineTransparency = 0
+		highlight.OutlineColor = Color3.fromRGB(255, 255, 0)
+		highlight.FillColor = Color3.fromRGB(255, 255, 0)
+	end
+end
+
+-- Create Color Picker UI
+local function createColorUI()
+	colorFrame = Instance.new("Frame")
+	colorFrame.Name = "ColorFrame"
+	colorFrame.Size = UDim2.new(0, 280, 0, 340)
+	colorFrame.Position = UDim2.new(0.5, -140, 0.5, -170)
+	colorFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+	colorFrame.BorderSizePixel = 0
+	colorFrame.Visible = false
+	colorFrame.Parent = screenGui
+	
+	local colorCorner = Instance.new("UICorner")
+	colorCorner.CornerRadius = UDim.new(0, 8)
+	colorCorner.Parent = colorFrame
+	
+	local colorTitle = Instance.new("TextLabel")
+	colorTitle.Size = UDim2.new(1, 0, 0, 30)
+	colorTitle.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+	colorTitle.BorderSizePixel = 0
+	colorTitle.Text = "Color Picker"
+	colorTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+	colorTitle.TextSize = 14
+	colorTitle.Font = Enum.Font.GothamBold
+	colorTitle.Parent = colorFrame
+	
+	local colorTitleCorner = Instance.new("UICorner")
+	colorTitleCorner.CornerRadius = UDim.new(0, 8)
+	colorTitleCorner.Parent = colorTitle
+	
+	-- Color wheel
+	local wheelContainer = Instance.new("Frame")
+	wheelContainer.Size = UDim2.new(0, 200, 0, 200)
+	wheelContainer.Position = UDim2.new(0.5, -100, 0, 45)
+	wheelContainer.BackgroundTransparency = 1
+	wheelContainer.Parent = colorFrame
+	
+	local colorWheel = Instance.new("ImageLabel")
+	colorWheel.Size = UDim2.new(1, 0, 1, 0)
+	colorWheel.BackgroundTransparency = 1
+	colorWheel.Image = "rbxasset://textures/ui/ColorPicker/wheel.png"
+	colorWheel.Parent = wheelContainer
+	
+	local pickerCircle = Instance.new("Frame")
+	pickerCircle.Size = UDim2.new(0, 20, 0, 20)
+	pickerCircle.Position = UDim2.new(0.5, -10, 0.5, -10)
+	pickerCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	pickerCircle.BorderSizePixel = 2
+	pickerCircle.BorderColor3 = Color3.fromRGB(0, 0, 0)
+	pickerCircle.Parent = wheelContainer
+	
+	local circleCorner = Instance.new("UICorner")
+	circleCorner.CornerRadius = UDim.new(1, 0)
+	circleCorner.Parent = pickerCircle
+	
+	-- Color bar
+	local colorBar = Instance.new("ScrollingFrame")
+	colorBar.Size = UDim2.new(0.9, 0, 0, 40)
+	colorBar.Position = UDim2.new(0.05, 0, 0, 255)
+	colorBar.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	colorBar.BorderSizePixel = 0
+	colorBar.ScrollBarThickness = 6
+	colorBar.CanvasSize = UDim2.new(0, 0, 0, 0)
+	colorBar.ScrollingDirection = Enum.ScrollingDirection.X
+	colorBar.Parent = colorFrame
+	
+	local barCorner = Instance.new("UICorner")
+	barCorner.CornerRadius = UDim.new(0, 6)
+	barCorner.Parent = colorBar
+	
+	local barLayout = Instance.new("UIListLayout")
+	barLayout.FillDirection = Enum.FillDirection.Horizontal
+	barLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	barLayout.Padding = UDim.new(0, 2)
+	barLayout.Parent = colorBar
+	
+	-- Add color buttons to bar
+	for i, colorInfo in ipairs(colorData) do
+		local colorBtn = Instance.new("TextButton")
+		colorBtn.Size = UDim2.new(0, 35, 0, 35)
+		colorBtn.BackgroundColor3 = colorInfo.color
+		colorBtn.BorderSizePixel = 0
+		colorBtn.Text = ""
+		colorBtn.LayoutOrder = i
+		colorBtn.Parent = colorBar
+		
+		local btnCorner = Instance.new("UICorner")
+		btnCorner.CornerRadius = UDim.new(0, 6)
+		btnCorner.Parent = colorBtn
+		
+		colorBtn.MouseButton1Click:Connect(function()
+			selectedColor = colorInfo.color
+			pickerCircle.BackgroundColor3 = colorInfo.color
+		end)
+	end
+	
+	barLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+		colorBar.CanvasSize = UDim2.new(0, barLayout.AbsoluteContentSize.X, 0, 0)
+	end)
+	
+	-- Draggable picker circle
+	local draggingPicker = false
+	
+	pickerCircle.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			draggingPicker = true
+		end
+	end)
+	
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			draggingPicker = false
+		end
+	end)
+	
+	UserInputService.InputChanged:Connect(function(input)
+		if draggingPicker and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			local mousePos = UserInputService:GetMouseLocation()
+			local wheelPos = wheelContainer.AbsolutePosition
+			local wheelSize = wheelContainer.AbsoluteSize
+			
+			local relX = mousePos.X - wheelPos.X - wheelSize.X / 2
+			local relY = mousePos.Y - wheelPos.Y - wheelSize.Y / 2
+			
+			local distance = math.sqrt(relX * relX + relY * relY)
+			local maxDist = wheelSize.X / 2
+			
+			if distance > maxDist then
+				relX = relX / distance * maxDist
+				relY = relY / distance * maxDist
+			end
+			
+			pickerCircle.Position = UDim2.new(0.5, relX - 10, 0.5, relY - 10)
+			
+			-- Sample color from wheel
+			local angle = math.atan2(relY, relX)
+			local hue = (angle + math.pi) / (2 * math.pi)
+			local sat = math.min(distance / maxDist, 1)
+			selectedColor = Color3.fromHSV(hue, sat, 1)
+			pickerCircle.BackgroundColor3 = selectedColor
+		end
+	end)
+	
+	-- Buttons
+	local buttonContainer = Instance.new("Frame")
+	buttonContainer.Size = UDim2.new(0.9, 0, 0, 30)
+	buttonContainer.Position = UDim2.new(0.05, 0, 0, 305)
+	buttonContainer.BackgroundTransparency = 1
+	buttonContainer.Parent = colorFrame
+	
+	local okButton = Instance.new("TextButton")
+	okButton.Size = UDim2.new(0.48, 0, 1, 0)
+	okButton.Position = UDim2.new(0, 0, 0, 0)
+	okButton.BackgroundColor3 = Color3.fromRGB(70, 130, 180)
+	okButton.BorderSizePixel = 0
+	okButton.Text = "OK"
+	okButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	okButton.TextSize = 12
+	okButton.Font = Enum.Font.GothamBold
+	okButton.Parent = buttonContainer
+	
+	local okCorner = Instance.new("UICorner")
+	okCorner.CornerRadius = UDim.new(0, 6)
+	okCorner.Parent = okButton
+	
+	local cancelButton = Instance.new("TextButton")
+	cancelButton.Size = UDim2.new(0.48, 0, 1, 0)
+	cancelButton.Position = UDim2.new(0.52, 0, 0, 0)
+	cancelButton.BackgroundColor3 = Color3.fromRGB(180, 70, 70)
+	cancelButton.BorderSizePixel = 0
+	cancelButton.Text = "Cancel"
+	cancelButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	cancelButton.TextSize = 12
+	cancelButton.Font = Enum.Font.GothamBold
+	cancelButton.Parent = buttonContainer
+	
+	local cancelCorner = Instance.new("UICorner")
+	cancelCorner.CornerRadius = UDim.new(0, 6)
+	cancelCorner.Parent = cancelButton
+	
+	okButton.MouseButton1Click:Connect(function()
+		colorFrame.Visible = false
+		if selectedPart and selectedPart.Parent then
+			selectedPart.Color = selectedColor
+		end
+	end)
+	
+	cancelButton.MouseButton1Click:Connect(function()
+		colorFrame.Visible = false
+	end)
+end
+
+-- Create Material Selection UI
+local function createMaterialUI()
+	materialFrame = Instance.new("Frame")
+	materialFrame.Name = "MaterialFrame"
+	materialFrame.Size = UDim2.new(0, 140, 0, 250)
+	materialFrame.Position = UDim2.new(0.65, 0, 0.3, 0)
+	materialFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+	materialFrame.BorderSizePixel = 0
+	materialFrame.Visible = false
+	materialFrame.Parent = screenGui
+	
+	local matCorner = Instance.new("UICorner")
+	matCorner.CornerRadius = UDim.new(0, 8)
+	matCorner.Parent = materialFrame
+	
+	local matTitle = Instance.new("TextLabel")
+	matTitle.Size = UDim2.new(1, 0, 0, 25)
+	matTitle.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+	matTitle.BorderSizePixel = 0
+	matTitle.Text = "Materials"
+	matTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+	matTitle.TextSize = 12
+	matTitle.Font = Enum.Font.GothamBold
+	matTitle.Parent = materialFrame
+	
+	local matTitleCorner = Instance.new("UICorner")
+	matTitleCorner.CornerRadius = UDim.new(0, 8)
+	matTitleCorner.Parent = matTitle
+	
+	local matScrollFrame = Instance.new("ScrollingFrame")
+	matScrollFrame.Size = UDim2.new(1, -10, 1, -35)
+	matScrollFrame.Position = UDim2.new(0, 5, 0, 30)
+	matScrollFrame.BackgroundTransparency = 1
+	matScrollFrame.BorderSizePixel = 0
+	matScrollFrame.ScrollBarThickness = 6
+	matScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+	matScrollFrame.Parent = materialFrame
+	
+	local matList = Instance.new("UIListLayout")
+	matList.Padding = UDim.new(0, 5)
+	matList.SortOrder = Enum.SortOrder.LayoutOrder
+	matList.Parent = matScrollFrame
+	
+	local materials = {
+		{Name = "Plastic", Material = Enum.Material.Plastic},
+		{Name = "Neon", Material = Enum.Material.Neon},
+		{Name = "Grass", Material = Enum.Material.Grass},
+		{Name = "Cobblestone", Material = Enum.Material.Cobblestone},
+		{Name = "Glass", Material = Enum.Material.Glass},
+		{Name = "ForceField", Material = Enum.Material.ForceField},
+		{Name = "Wood", Material = Enum.Material.Wood},
+		{Name = "Metal", Material = Enum.Material.Metal},
+		{Name = "Concrete", Material = Enum.Material.Concrete},
+		{Name = "Brick", Material = Enum.Material.Brick}
+	}
+	
+	for i, matData in ipairs(materials) do
+		local matButton = Instance.new("TextButton")
+		matButton.Size = UDim2.new(1, 0, 0, 22)
+		matButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+		matButton.BorderSizePixel = 0
+		matButton.Text = matData.Name
+		matButton.TextColor3 = Color3.fromRGB(200, 200, 200)
+		matButton.TextSize = 10
+		matButton.Font = Enum.Font.Gotham
+		matButton.LayoutOrder = i
+		matButton.Parent = matScrollFrame
+		
+		local matBtnCorner = Instance.new("UICorner")
+		matBtnCorner.CornerRadius = UDim.new(0, 6)
+		matBtnCorner.Parent = matButton
+		
+		matButton.MouseButton1Click:Connect(function()
+			if selectedPart and selectedPart.Parent then
+				selectedPart.Material = matData.Material
+			end
+		end)
+	end
+	
+	matList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+		matScrollFrame.CanvasSize = UDim2.new(0, 0, 0, matList.AbsoluteContentSize.Y)
+	end)
+end
+
+-- Create UI
+local function createUI()
+	screenGui = Instance.new("ScreenGui")
+	screenGui.Name = "BuildToolUI"
+	screenGui.ResetOnSpawn = false
+	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	screenGui.Parent = player:WaitForChild("PlayerGui")
+	
+	-- Main frame (compact for mobile)
+	mainFrame = Instance.new("Frame")
+	mainFrame.Name = "MainFrame"
+	mainFrame.Size = UDim2.new(0, 120, 0, 230)
+	mainFrame.Position = UDim2.new(0.85, 0, 0.3, 0)
+	mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+	mainFrame.BorderSizePixel = 0
+	mainFrame.Active = true
+	mainFrame.Parent = screenGui
+	
+	-- Corner radius
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = mainFrame
+	
+	-- Title bar for dragging
+	local titleBar = Instance.new("TextLabel")
+	titleBar.Name = "TitleBar"
+	titleBar.Size = UDim2.new(1, 0, 0, 25)
+	titleBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+	titleBar.BorderSizePixel = 0
+	titleBar.Text = "Build"
+	titleBar.TextColor3 = Color3.fromRGB(255, 255, 255)
+	titleBar.TextSize = 12
+	titleBar.Font = Enum.Font.GothamBold
+	titleBar.Parent = mainFrame
+	
+	local titleCorner = Instance.new("UICorner")
+	titleCorner.CornerRadius = UDim.new(0, 8)
+	titleCorner.Parent = titleBar
+	
+	-- Button container
+	local container = Instance.new("Frame")
+	container.Name = "Container"
+	container.Size = UDim2.new(1, -10, 1, -35)
+	container.Position = UDim2.new(0, 5, 0, 30)
+	container.BackgroundTransparency = 1
+	container.Parent = mainFrame
+	
+	local listLayout = Instance.new("UIListLayout")
+	listLayout.Padding = UDim.new(0, 5)
+	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	listLayout.Parent = container
+	
+	-- Toggle buttons
+	local modes = {"Add", "Move", "Resize", "Copy", "Material", "Delete", "Colors"}
+	local buttons = {}
+	
+	for i, modeName in ipairs(modes) do
+		local button = Instance.new("TextButton")
+		button.Name = modeName .. "Button"
+		button.Size = UDim2.new(1, 0, 0, 25)
+		button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+		button.BorderSizePixel = 0
+		button.Text = modeName
+		button.TextColor3 = Color3.fromRGB(200, 200, 200)
+		button.TextSize = 11
+		button.Font = Enum.Font.Gotham
+		button.LayoutOrder = i
+		button.Parent = container
+		
+		local btnCorner = Instance.new("UICorner")
+		btnCorner.CornerRadius = UDim.new(0, 6)
+		btnCorner.Parent = button
+		
+		buttons[modeName] = button
+		
+		-- Button click handler
+		button.MouseButton1Click:Connect(function()
+			for _, btn in pairs(buttons) do
+				btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+				btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+			end
+			
+			button.BackgroundColor3 = Color3.fromRGB(70, 130, 180)
+			button.TextColor3 = Color3.fromRGB(255, 255, 255)
+			currentMode = modeName
+			
+			clearHandles()
+			if materialFrame then
+				materialFrame.Visible = false
+			end
+			if colorFrame then
+				colorFrame.Visible = false
+			end
+		end)
+	end
+	
+	-- Multi-touch dragging support
+	local function updateDrag(input)
+		if not activeTouches[input] then return end
+		local delta = input.Position - activeTouches[input].startPos
+		mainFrame.Position = UDim2.new(
+			activeTouches[input].frameStart.X.Scale,
+			activeTouches[input].frameStart.X.Offset + delta.X,
+			activeTouches[input].frameStart.Y.Scale,
+			activeTouches[input].frameStart.Y.Offset + delta.Y
+		)
+	end
+	
+	titleBar.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			activeTouches[input] = {
+				startPos = input.Position,
+				frameStart = mainFrame.Position
+			}
+		end
+	end)
+	
+	titleBar.InputChanged:Connect(function(input)
+		if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and activeTouches[input] then
+			updateDrag(input)
+		end
+	end)
+	
+	titleBar.InputEnded:Connect(function(input)
+		activeTouches[input] = nil
+	end)
+	
+	UserInputService.InputChanged:Connect(function(input)
+		if activeTouches[input] and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			updateDrag(input)
+		end
+	end)
+	
+	UserInputService.InputEnded:Connect(function(input)
+		activeTouches[input] = nil
+	end)
+	
+	screenGui.Enabled = false
+	
+	createMaterialUI()
+	createColorUI()
+	createHighlight()
+	loadColorData()
+end
+
+-- Clear handles
+local function clearHandles()
+	for _, handle in pairs(handles) do
+		if handle and handle.Parent then
+			handle:Destroy()
+		end
+	end
+	handles = {}
+end
+
+-- Clear selection
+local function clearSelection()
+	selectedPart = nil
+	if highlight then
+		highlight.Parent = nil
+	end
+	clearHandles()
+end
+
+-- Create handles for move/resize
+local function createHandles(part, color)
+	clearHandles()
+	
+	if not part or not part.Parent then return end
+	
+	local positions = {
+		{Name = "Right", CFrame = CFrame.new(part.Size.X/2, 0, 0)},
+		{Name = "Left", CFrame = CFrame.new(-part.Size.X/2, 0, 0)},
+		{Name = "Top", CFrame = CFrame.new(0, part.Size.Y/2, 0)},
+		{Name = "Bottom", CFrame = CFrame.new(0, -part.Size.Y/2, 0)},
+		{Name = "Front", CFrame = CFrame.new(0, 0, -part.Size.Z/2)},
+		{Name = "Back", CFrame = CFrame.new(0, 0, part.Size.Z/2)}
+	}
+	
+	for _, pos in ipairs(positions) do
+		local handle = Instance.new("Part")
+		handle.Name = pos.Name .. "Handle"
+		handle.Shape = Enum.PartType.Ball
+		handle.Size = Vector3.new(0.5, 0.5, 0.5)
+		handle.Color = color
+		handle.Material = Enum.Material.Neon
+		handle.CanCollide = false
+		handle.Anchored = true
+		handle.CFrame = part.CFrame * pos.CFrame
+		handle.Parent = workspace
+		
+		handles[pos.Name] = handle
+	end
+end
+
+-- Update handle positions
+local function updateHandles(part)
+	if not part or not part.Parent then
+		clearHandles()
+		return
+	end
+	
+	local positions = {
+		Right = CFrame.new(part.Size.X/2, 0, 0),
+		Left = CFrame.new(-part.Size.X/2, 0, 0),
+		Top = CFrame.new(0, part.Size.Y/2, 0),
+		Bottom = CFrame.new(0, -part.Size.Y/2, 0),
+		Front = CFrame.new(0, 0, -part.Size.Z/2),
+		Back = CFrame.new(0, 0, part.Size.Z/2)
+	}
+	
+	for name, pos in pairs(positions) do
+		if handles[name] and handles[name].Parent then
+			handles[name].CFrame = part.CFrame * pos
+		end
+	end
+end
+
+-- Add function - now places at mouse position
+local function addBrick()
+	if not mouse.Target then return end
+	
+	local newPart = Instance.new("Part")
+	newPart.Size = Vector3.new(4, 1, 2)
+	newPart.Position = mouse.Hit.Position + Vector3.new(0, 0.5, 0)
+	newPart.Anchored = true
+	newPart.Material = Enum.Material.Plastic
+	newPart.BrickColor = BrickColor.new("Bright red")
+	newPart.Parent = workspace
+	
+	table.insert(createdParts, newPart)
+end
+
+-- Select part
+local function selectPart(part)
+	if not part or not part.Parent then return end
+	
+	local isCreatedPart = false
+	for _, p in ipairs(createdParts) do
+		if p == part then
+			isCreatedPart = true
+			break
+		end
+	end
+	
+	if isCreatedPart then
+		selectedPart = part
+		
+		if highlight then
+			highlight.Parent = part
+		end
+		
+		if currentMode == "Move" then
+			createHandles(part, Color3.fromRGB(0, 100, 255))
+		elseif currentMode == "Resize" then
+			createHandles(part, Color3.fromRGB(255, 140, 0))
+		end
+	end
+end
+
+-- Copy function
+local function copyPart()
+	if selectedPart and selectedPart.Parent then
+		local clone = selectedPart:Clone()
+		clone.Position = selectedPart.Position + Vector3.new(0, 0, 3)
+		clone.Parent = workspace
+		table.insert(createdParts, clone)
+		
+		selectedPart = clone
+		if highlight then
+			highlight.Parent = clone
+		end
+		
+		if currentMode == "Resize" then
+			createHandles(clone, Color3.fromRGB(255, 140, 0))
+		else
+			createHandles(clone, Color3.fromRGB(0, 100, 255))
+		end
+	end
+end
+
+-- Delete function
+local function deletePart()
+	if selectedPart and selectedPart.Parent and selectedPart.Name ~= "Baseplate" then
+		local index = nil
+		for i, p in ipairs(createdParts) do
+			if p == selectedPart then
+				index = i
+				break
+			end
+		end
+		
+		if index then
+			table.remove(createdParts, index)
+		end
+		
+		selectedPart:Destroy()
+		clearSelection()
+	end
+end
+
+-- Mouse click handling
+mouse.Button1Down:Connect(function()
+	if not tool.Parent or tool.Parent ~= character then return end
+	
+	if currentMode == "Add" then
+		addBrick()
+	elseif currentMode == "Move" or currentMode == "Resize" then
+		local target = mouse.Target
+		
+		if not target then return end
+		
+		-- Check if clicking a handle
+		for name, handle in pairs(handles) do
+			if target == handle then
+				draggingHandle = true
+				handleType = name
+				return
+			end
+		end
+		
+-- Otherwise select a part
+		selectPart(target)
+	elseif currentMode == "Copy" then
+		if mouse.Target then
+			selectPart(mouse.Target)
+		end
+		copyPart()
+	elseif currentMode == "Material" then
+		if mouse.Target then
+			selectPart(mouse.Target)
+			if materialFrame then
+				materialFrame.Visible = true
+			end
+		end
+	elseif currentMode == "Delete" then
+		if mouse.Target then
+			selectPart(mouse.Target)
+			deletePart()
+		end
+	elseif currentMode == "Colors" then
+		if mouse.Target then
+			selectPart(mouse.Target)
+			if colorFrame then
+				colorFrame.Visible = true
+			end
+		end
+	end
+end)
+
+mouse.Button1Up:Connect(function()
+	draggingHandle = false
+	handleType = nil
+end)
+
+-- Handle dragging render loop with fixed resize
+local function startRenderLoop()
+	if renderConnection then
+		renderConnection:Disconnect()
+	end
+	
+	renderConnection = RunService.RenderStepped:Connect(function()
+		if draggingHandle and selectedPart and selectedPart.Parent and handleType then
+			local mousePos = mouse.Hit.Position
+			
+			if currentMode == "Move" then
+				if handleType == "Right" or handleType == "Left" then
+					selectedPart.Position = Vector3.new(mousePos.X, selectedPart.Position.Y, selectedPart.Position.Z)
+				elseif handleType == "Top" or handleType == "Bottom" then
+					selectedPart.Position = Vector3.new(selectedPart.Position.X, mousePos.Y, selectedPart.Position.Z)
+				elseif handleType == "Front" or handleType == "Back" then
+					selectedPart.Position = Vector3.new(selectedPart.Position.X, selectedPart.Position.Y, mousePos.Z)
+				end
+			elseif currentMode == "Resize" then
+				local center = selectedPart.Position
+				local size = selectedPart.Size
+				
+				if handleType == "Right" then
+					local newSize = math.max(0.5, (mousePos.X - center.X) * 2)
+					selectedPart.Size = Vector3.new(newSize, size.Y, size.Z)
+				elseif handleType == "Left" then
+					local newSize = math.max(0.5, (center.X - mousePos.X) * 2)
+					selectedPart.Size = Vector3.new(newSize, size.Y, size.Z)
+				elseif handleType == "Top" then
+					local newSize = math.max(0.5, (mousePos.Y - center.Y) * 2)
+					selectedPart.Size = Vector3.new(size.X, newSize, size.Z)
+				elseif handleType == "Bottom" then
+					local newSize = math.max(0.5, (center.Y - mousePos.Y) * 2)
+					selectedPart.Size = Vector3.new(size.X, newSize, size.Z)
+				elseif handleType == "Front" then
+					local newSize = math.max(0.5, (center.Z - mousePos.Z) * 2)
+					selectedPart.Size = Vector3.new(size.X, size.Y, newSize)
+				elseif handleType == "Back" then
+					local newSize = math.max(0.5, (mousePos.Z - center.Z) * 2)
+					selectedPart.Size = Vector3.new(size.X, size.Y, newSize)
+				end
+			end
+			
+			updateHandles(selectedPart)
+		end
+	end)
+end
+
+local function stopRenderLoop()
+	if renderConnection then
+		renderConnection:Disconnect()
+		renderConnection = nil
+	end
+end
+
+-- Tool equipped
+tool.Equipped:Connect(function()
+	character = tool.Parent
+	if character then
+		humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+	end
+	
+	if not screenGui then
+		createUI()
+	end
+	
+	if screenGui then
+		screenGui.Enabled = true
+	end
+	
+	currentMode = nil
+	startRenderLoop()
+end)
+
+-- Tool unequipped
+tool.Unequipped:Connect(function()
+	if screenGui then
+		screenGui.Enabled = false
+	end
+	if materialFrame then
+		materialFrame.Visible = false
+	end
+	if colorFrame then
+		colorFrame.Visible = false
+	end
+	currentMode = nil
+	clearSelection()
+	stopRenderLoop()
+end)
+
+-- Cleanup on character respawn
+player.CharacterAdded:Connect(function(newChar)
+	character = newChar
+	humanoidRootPart = newChar:WaitForChild("HumanoidRootPart")
+	clearSelection()
+	draggingHandle = false
+	handleType = nil
+end)
