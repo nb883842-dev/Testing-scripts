@@ -415,7 +415,7 @@ local function createToggle(name, displayText, yPosition, description)
 		end
 	end
 	
-	-- Info button
+		-- Info button
 	local infoBtn = Instance.new("TextButton")
 	infoBtn.Name = "InfoBtn"
 	infoBtn.Text = "?"
@@ -654,7 +654,7 @@ local function toggleTerrainPixelation(enabled)
 				if obj:IsA("BasePart") and obj.Parent then
 					local distance = (obj.Position - camPos).Magnitude
 					
-					if distance < 50 then
+50 then
 						obj.CastShadow = true
 					elseif distance < 150 then
 						if obj.Material ~= Enum.Material.SmoothPlastic then
@@ -761,7 +761,7 @@ pixelToggle.MouseButton1Click:Connect(function()
 end)
 
 -- Close tooltip when clicking outside
-screenGui.InputBegan:Connect(function(input)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		if tooltip.Visible then
 			tooltip.Visible = false
