@@ -1,0 +1,474 @@
+task.wait(.5)
+local p=game.Players.LocalPlayer local c=p.Character or p.CharacterAdded:Wait()local h=c:WaitForChild("HumanoidRootPart")
+local rs,ps,ts=game:GetService("RunService"),game:GetService("Players"),game:GetService("TweenService")
+local o,b,cn,t,eq,ui,m,tm,tg=false,nil,nil,nil,false,nil,nil,nil,nil local oc,vt=nil,false
+
+-- Sound IDs
+local sndIDs={["Heart Attack"]=140695149439373,["Poison"]=71191289424817,["Accident"]=18162963776,["Seizure"]=9114433041,["Burning"]=78187280932934,["Drowning"]=8176202046,["Explosion"]=5801257793}
+
+local function snd(n)local id=sndIDs[n]if not id then return end local s=Instance.new("Sound")s.SoundId="rbxassetid://"..id s.Volume=.7 s.Parent=workspace s:Play()game:GetService("Debris"):AddItem(s,10)end
+
+local function fx(f)
+local sg=Instance.new("ScreenGui")sg.Name="FX"sg.DisplayOrder=999 sg.IgnoreGuiInset=true sg.ResetOnSpawn=false sg.Parent=p.PlayerGui
+local fr=Instance.new("Frame")fr.Size=UDim2.new(1,0,1,0)fr.BackgroundTransparency=1 fr.BorderSizePixel=0 fr.Parent=sg
+
+if f=="Heart Attack"then 
+snd("Heart Attack")
+local fl=Instance.new("Frame")fl.Size=UDim2.new(1,0,1,0)fl.BackgroundColor3=Color3.fromRGB(255,0,0)fl.BackgroundTransparency=1 fl.BorderSizePixel=0 fl.Parent=fr
+task.spawn(function()for i=1,10 do ts:Create(fl,TweenInfo.new(.2),{BackgroundTransparency=.25}):Play()task.wait(.2)ts:Create(fl,TweenInfo.new(.25),{BackgroundTransparency=1}):Play()task.wait(.4)end task.wait(.5)sg:Destroy()end)
+
+elseif f=="Poison"then 
+snd("Poison")
+local fl=Instance.new("Frame")fl.Size=UDim2.new(1,0,1,0)fl.BackgroundColor3=Color3.fromRGB(0,255,50)fl.BackgroundTransparency=1 fl.BorderSizePixel=0 fl.Parent=fr
+task.spawn(function()for i=1,25 do local drp=Instance.new("Frame")drp.Size=UDim2.new(0,math.random(15,40),0,math.random(15,40))drp.Position=UDim2.new(math.random(0,100)/100,0,-.1,0)drp.BackgroundColor3=Color3.fromRGB(0,255,100)drp.BackgroundTransparency=.3 drp.BorderSizePixel=0 drp.Parent=fr local co=Instance.new("UICorner")co.CornerRadius=UDim.new(1,0)co.Parent=drp ts:Create(drp,TweenInfo.new(math.random(25,45)/10),{Position=UDim2.new(drp.Position.X.Scale,0,1.1,0),BackgroundTransparency=1}):Play()game:GetService("Debris"):AddItem(drp,5)task.wait(.15)end end)
+task.spawn(function()for i=1,12 do ts:Create(fl,TweenInfo.new(.3),{BackgroundTransparency=.3}):Play()task.wait(.3)ts:Create(fl,TweenInfo.new(.3),{BackgroundTransparency=1}):Play()task.wait(.4)end task.wait(1)sg:Destroy()end)
+
+elseif f=="Accident"then 
+snd("Accident")
+local fl=Instance.new("Frame")fl.Size=UDim2.new(1,0,1,0)fl.BackgroundColor3=Color3.fromRGB(255,255,255)fl.BackgroundTransparency=1 fl.BorderSizePixel=0 fl.Parent=fr
+ts:Create(fl,TweenInfo.new(.1),{BackgroundTransparency=0}):Play()
+task.spawn(function()task.wait(4)ts:Create(fl,TweenInfo.new(.8),{BackgroundTransparency=1}):Play()task.wait(1)sg:Destroy()end)
+
+elseif f=="Explosion"then 
+snd("Explosion")
+local fl=Instance.new("Frame")fl.Size=UDim2.new(1,0,1,0)fl.BackgroundColor3=Color3.fromRGB(255,150,0)fl.BackgroundTransparency=0 fl.BorderSizePixel=0 fl.Parent=fr 
+ts:Create(fl,TweenInfo.new(.15),{BackgroundTransparency=1}):Play()
+local cam=workspace.CurrentCamera local ocf=cam.CFrame 
+task.spawn(function()for i=1,20 do cam.CFrame=ocf*CFrame.Angles(math.rad(math.random(-10,10)),math.rad(math.random(-10,10)),math.rad(math.random(-5,5)))task.wait(.05)end cam.CFrame=ocf task.wait(.5)sg:Destroy()end)
+
+elseif f=="Burning"then 
+snd("Burning")
+local fl=Instance.new("Frame")fl.Size=UDim2.new(1,0,1,0)fl.BackgroundColor3=Color3.fromRGB(255,100,0)fl.BackgroundTransparency=1 fl.BorderSizePixel=0 fl.Parent=fr
+task.spawn(function()for i=1,8 do ts:Create(fl,TweenInfo.new(.25),{BackgroundTransparency=.4}):Play()task.wait(.25)ts:Create(fl,TweenInfo.new(.25),{BackgroundTransparency=1}):Play()task.wait(.15)end sg:Destroy()end)
+
+elseif f=="Drowning"then 
+snd("Drowning")
+local fl=Instance.new("Frame")fl.Size=UDim2.new(1,0,1,0)fl.BackgroundColor3=Color3.fromRGB(50,100,255)fl.BackgroundTransparency=1 fl.BorderSizePixel=0 fl.Parent=fr
+for i=1,30 do local bub=Instance.new("Frame")bub.Size=UDim2.new(0,math.random(20,50),0,math.random(20,50))bub.Position=UDim2.new(math.random(0,100)/100,0,1.1,0)bub.BackgroundColor3=Color3.fromRGB(100,150,255)bub.BackgroundTransparency=.5 bub.BorderSizePixel=0 bub.Parent=fr local co=Instance.new("UICorner")co.CornerRadius=UDim.new(1,0)co.Parent=bub ts:Create(bub,TweenInfo.new(math.random(20,35)/10),{Position=UDim2.new(bub.Position.X.Scale,0,-.2,0),BackgroundTransparency=1}):Play()game:GetService("Debris"):AddItem(bub,4)end
+task.spawn(function()for i=1,10 do ts:Create(fl,TweenInfo.new(.3),{BackgroundTransparency=.5}):Play()task.wait(.3)ts:Create(fl,TweenInfo.new(.3),{BackgroundTransparency=1}):Play()task.wait(.3)end sg:Destroy()end)
+
+elseif f=="Seizure"then 
+snd("Seizure")
+local fl=Instance.new("Frame")fl.Size=UDim2.new(1,0,1,0)fl.BackgroundColor3=Color3.fromRGB(255,255,255)fl.BackgroundTransparency=1 fl.BorderSizePixel=0 fl.Parent=fr
+task.spawn(function()for i=1,38 do ts:Create(fl,TweenInfo.new(.08),{BackgroundTransparency=.3,BackgroundColor3=Color3.fromRGB(math.random(0,255),math.random(0,255),math.random(0,255))}):Play()task.wait(.08)end sg:Destroy()end)
+end 
+end
+
+local function pov(tp)if not tp or not tp.Character then return end local cam=workspace.CurrentCamera oc=cam.CameraType cam.CameraType=Enum.CameraType.Custom cam.CameraSubject=tp.Character:FindFirstChild("Humanoid")vt=true end
+local function rpov()if not vt then return end local cam=workspace.CurrentCamera cam.CameraType=oc or Enum.CameraType.Custom cam.CameraSubject=c:FindFirstChild("Humanoid")vt=false end
+
+local function eff(pl,mt,ti)if not pl or not pl.Character then return end local ch=pl.Character local hm=ch:FindFirstChildWhichIsA("Humanoid")
+
+if mt=="Heart Attack"then 
+fx("Heart Attack")
+task.spawn(function()
+for i=1,5 do 
+if not ch or not ch.Parent then break end 
+if hm then hm.WalkSpeed=0 hm.JumpPower=0 end 
+for _,pt in pairs(ch:GetDescendants())do if pt:IsA("BasePart")then pt.Color=Color3.fromRGB(200,50,50)end end 
+task.wait(.4)
+if not ch or not ch.Parent then break end 
+for _,pt in pairs(ch:GetDescendants())do if pt:IsA("BasePart")then pt.Color=Color3.fromRGB(255,255,255)end end 
+task.wait(.4)
+end 
+end)
+
+elseif mt=="Poison"then 
+fx("Poison")
+task.spawn(function()
+if hm then hm.WalkSpeed=hm.WalkSpeed*.3 end 
+for i=1,ti*2 do 
+if not ch or not ch.Parent then break end 
+for _,pt in pairs(ch:GetDescendants())do if pt:IsA("BasePart")then pt.Color=Color3.fromRGB(50,255,100)end end 
+task.wait(.3)
+end 
+task.wait(3)
+end)
+
+elseif mt=="Accident"then 
+fx("Accident")
+task.spawn(function()
+local dur,el=4,0 
+if hm then hm.PlatformStand=true end 
+while el<dur and ch and ch.Parent do 
+if ch then 
+local r=ch:FindFirstChild("HumanoidRootPart")
+if r then 
+r.CFrame=r.CFrame*CFrame.Angles(math.rad(math.random(-60,60)),math.rad(math.random(-60,60)),0)
+r.Velocity=Vector3.new(math.random(-70,70),math.random(10,40),math.random(-70,70))
+r.RotVelocity=Vector3.new(math.random(-50,50),math.random(-50,50),math.random(-50,50))
+end 
+end 
+task.wait(.2)
+el=el+.2 
+end 
+end)
+
+elseif mt=="Seizure"then 
+fx("Seizure")
+task.spawn(function()
+local dur,el=3,0 
+if hm then hm.PlatformStand=true end 
+while el<dur and ch and ch.Parent do 
+if ch then 
+for _,pt in pairs(ch:GetDescendants())do 
+if pt:IsA("BasePart")and pt.Name~="HumanoidRootPart"then 
+pt.CFrame=pt.CFrame*CFrame.Angles(math.rad(math.random(-45,45)),math.rad(math.random(-45,45)),math.rad(math.random(-45,45)))
+end 
+end 
+end 
+task.wait(.08)
+el=el+.08 
+end
+if ch and ch:FindFirstChildWhichIsA("Humanoid")then
+ch:FindFirstChildWhichIsA("Humanoid").PlatformStand=false
+for _,pt in pairs(ch:GetDescendants())do 
+if pt:IsA("BasePart")then 
+pt.Anchored=false
+end
+end
+ch:BreakJoints()
+end
+end)
+
+elseif mt=="Burning"then 
+fx("Burning")
+task.spawn(function()
+local fire=Instance.new("Fire")fire.Size=10 fire.Heat=15 
+local r=ch:FindFirstChild("HumanoidRootPart")if r then fire.Parent=r end 
+for i=1,4 do 
+if not ch or not ch.Parent then break end 
+for _,pt in pairs(ch:GetDescendants())do 
+if pt:IsA("BasePart")then 
+pt.Color=Color3.fromRGB(20,20,20)
+end 
+end 
+task.wait(.5)
+end 
+end)
+
+elseif mt=="Drowning"then 
+fx("Drowning")
+task.spawn(function()
+if hm then hm.WalkSpeed=0 end 
+for i=1,10 do 
+if not ch or not ch.Parent then break end 
+for _,pt in pairs(ch:GetDescendants())do 
+if pt:IsA("BasePart")then 
+pt.Color=Color3.fromRGB(50,50,255)
+pt.Transparency=math.min(pt.Transparency+.02,.6)
+end 
+end 
+task.wait(.3)
+end 
+end)
+
+elseif mt=="Explosion"then 
+fx("Explosion")
+task.spawn(function()
+task.wait(1)
+local r=ch:FindFirstChild("HumanoidRootPart")
+if r then 
+local exp=Instance.new("Explosion")
+exp.Position=r.Position 
+exp.BlastRadius=20 
+exp.Parent=workspace
+end 
+end)
+end 
+end
+
+-- PART 1 ENDS HERE - Ready for Part 2 when you are
+-- PART 2: UI, Book, Tool Setup, and Death Note Rules
+
+local rulesShown=false
+local rulesText=[[DEATH NOTE RULES
+
+• The human whose name is written in this note shall die.
+
+• This note will not take effect unless the writer has the person's face in their mind when writing their name.
+
+• If the cause of death is written within 40 seconds of writing the person's name, it will happen.
+
+• If the cause of death is not specified, the person will simply die of a heart attack.
+
+• After writing the cause of death, details of the death should be written in the next 6 minutes and 40 seconds.
+
+• The Death Note will not affect those under 780 days of age.
+
+• The Death Note can only kill humans.]]
+
+local function mkui()
+if ui then pcall(function()ui:Destroy()end)ui=nil end
+local sg=Instance.new("ScreenGui")sg.Name="DNUI"sg.ResetOnSpawn=false sg.IgnoreGuiInset=true sg.Parent=p.PlayerGui
+
+-- Rules Frame (shows once on equip)
+local rf=Instance.new("Frame")rf.Name="Rules"rf.Size=UDim2.new(0,500,0,400)rf.Position=UDim2.new(.5,0,.5,0)rf.AnchorPoint=Vector2.new(.5,.5)rf.BackgroundColor3=Color3.fromRGB(240,230,210)rf.BorderSizePixel=4 rf.BorderColor3=Color3.fromRGB(80,60,40)rf.Visible=false rf.Parent=sg
+local rco=Instance.new("UICorner")rco.CornerRadius=UDim.new(0,10)rco.Parent=rf
+
+local rtitle=Instance.new("TextLabel")rtitle.Size=UDim2.new(1,0,0,50)rtitle.BackgroundColor3=Color3.fromRGB(20,20,20)rtitle.BorderSizePixel=0 rtitle.Font=Enum.Font.Creepster rtitle.Text="DEATH NOTE"rtitle.TextColor3=Color3.fromRGB(200,0,0)rtitle.TextSize=32 rtitle.TextStrokeTransparency=.3 rtitle.Parent=rf 
+local rtco=Instance.new("UICorner")rtco.CornerRadius=UDim.new(0,10)rtco.Parent=rtitle
+
+local rtext=Instance.new("TextLabel")rtext.Size=UDim2.new(1,-40,1,-100)rtext.Position=UDim2.new(0,20,0,60)rtext.BackgroundTransparency=1 rtext.Font=Enum.Font.IndieFlower rtext.Text=rulesText rtext.TextColor3=Color3.fromRGB(0,0,0)rtext.TextSize=18 rtext.TextWrapped=true rtext.TextXAlignment=Enum.TextXAlignment.Left rtext.TextYAlignment=Enum.TextYAlignment.Top rtext.Parent=rf
+
+local rclose=Instance.new("TextButton")rclose.Size=UDim2.new(0,120,0,35)rclose.Position=UDim2.new(.5,0,1,-45)rclose.AnchorPoint=Vector2.new(.5,0)rclose.BackgroundColor3=Color3.fromRGB(180,0,0)rclose.BorderSizePixel=2 rclose.BorderColor3=Color3.fromRGB(120,0,0)rclose.Font=Enum.Font.SourceSansBold rclose.Text="CLOSE"rclose.TextColor3=Color3.fromRGB(255,255,255)rclose.TextSize=20 rclose.Parent=rf 
+local rcco=Instance.new("UICorner")rcco.CornerRadius=UDim.new(0,6)rcco.Parent=rclose
+rclose.MouseButton1Click:Connect(function()rf.Visible=false end)
+
+-- Main Frame
+local mf=Instance.new("Frame")mf.Name="Main"mf.Size=UDim2.new(0,400,0,600)mf.Position=UDim2.new(.5,0,.5,0)mf.AnchorPoint=Vector2.new(.5,.5)mf.BackgroundColor3=Color3.fromRGB(10,10,10)mf.BorderSizePixel=4 mf.BorderColor3=Color3.fromRGB(60,60,60)mf.Visible=false mf.Active=true mf.Draggable=true mf.Parent=sg
+local co=Instance.new("UICorner")co.CornerRadius=UDim.new(0,10)co.Parent=mf
+
+local tb=Instance.new("TextLabel")tb.Size=UDim2.new(1,0,0,50)tb.BackgroundColor3=Color3.fromRGB(5,5,5)tb.BorderSizePixel=0 tb.Font=Enum.Font.Creepster tb.Text="DEATH NOTE"tb.TextColor3=Color3.fromRGB(220,220,220)tb.TextSize=28 tb.TextStrokeTransparency=.3 tb.Parent=mf 
+local tbc=Instance.new("UICorner")tbc.CornerRadius=UDim.new(0,10)tbc.Parent=tb
+
+local pb=Instance.new("Frame")pb.Size=UDim2.new(1,-20,0,200)pb.Position=UDim2.new(0,10,0,60)pb.BackgroundColor3=Color3.fromRGB(245,235,215)pb.BorderSizePixel=2 pb.BorderColor3=Color3.fromRGB(160,140,110)pb.Parent=mf 
+local pbc=Instance.new("UICorner")pbc.CornerRadius=UDim.new(0,6)pbc.Parent=pb
+
+local nb=Instance.new("TextBox")nb.Name="Name"nb.Size=UDim2.new(.95,0,0,35)nb.Position=UDim2.new(.025,0,0,8)nb.BackgroundColor3=Color3.fromRGB(250,245,230)nb.BorderSizePixel=1 nb.BorderColor3=Color3.fromRGB(100,100,100)nb.Font=Enum.Font.IndieFlower nb.PlaceholderText="Write name..."nb.Text=""nb.TextColor3=Color3.fromRGB(0,0,0)nb.TextSize=20 nb.Parent=pb 
+local nbc=Instance.new("UICorner")nbc.CornerRadius=UDim.new(0,4)nbc.Parent=nb
+
+local mc=Instance.new("ScrollingFrame")mc.Name="Methods"mc.Size=UDim2.new(.95,0,0,150)mc.Position=UDim2.new(.025,0,0,48)mc.BackgroundTransparency=1 mc.ScrollBarThickness=6 mc.CanvasSize=UDim2.new(0,0,0,0)mc.Parent=pb
+
+local mts={"Heart Attack","Poison","Accident","Seizure","Burning","Drowning","Explosion"}
+for i,mt in ipairs(mts)do 
+local mfr=Instance.new("Frame")mfr.Size=UDim2.new(1,0,0,28)mfr.Position=UDim2.new(0,0,0,(i-1)*30)mfr.BackgroundTransparency=1 mfr.Parent=mc
+
+local mb=Instance.new("TextButton")mb.Size=UDim2.new(.65,0,1,0)mb.BackgroundColor3=Color3.fromRGB(50,50,50)mb.BorderSizePixel=0 mb.Font=Enum.Font.SourceSansBold mb.Text=mt mb.TextColor3=Color3.fromRGB(255,255,255)mb.TextSize=16 mb.Parent=mfr 
+local mbc=Instance.new("UICorner")mbc.CornerRadius=UDim.new(0,4)mbc.Parent=mb
+
+local tbx=Instance.new("TextBox")tbx.Size=UDim2.new(.33,0,1,0)tbx.Position=UDim2.new(.67,0,0,0)tbx.BackgroundColor3=Color3.fromRGB(210,200,180)tbx.BorderSizePixel=1 tbx.BorderColor3=Color3.fromRGB(100,100,100)tbx.Font=Enum.Font.IndieFlower tbx.PlaceholderText="Sec"tbx.Text="5"tbx.TextColor3=Color3.fromRGB(0,0,0)tbx.TextSize=16 tbx.Parent=mfr 
+local tbc=Instance.new("UICorner")tbc.CornerRadius=UDim.new(0,4)tbc.Parent=tbx
+
+mb.MouseButton1Click:Connect(function()
+m=mt 
+tm=tonumber(tbx.Text)or 5 
+for _,cf in pairs(mc:GetChildren())do 
+if cf:IsA("Frame")then 
+local bt=cf:FindFirstChildOfClass("TextButton")
+if bt then bt.BackgroundColor3=Color3.fromRGB(50,50,50)end 
+end 
+end 
+mb.BackgroundColor3=Color3.fromRGB(150,20,20)
+end)
+end
+
+mc.CanvasSize=UDim2.new(0,0,0,#mts*30)
+
+local gf=Instance.new("Frame")gf.Name="Grid"gf.Size=UDim2.new(1,-20,0,280)gf.Position=UDim2.new(0,10,0,270)gf.BackgroundColor3=Color3.fromRGB(20,20,20)gf.BorderSizePixel=1 gf.BorderColor3=Color3.fromRGB(60,60,60)gf.Parent=mf 
+local gfc=Instance.new("UICorner")gfc.CornerRadius=UDim.new(0,6)gfc.Parent=gf
+
+local gt=Instance.new("TextLabel")gt.Size=UDim2.new(1,0,0,35)gt.BackgroundColor3=Color3.fromRGB(10,10,10)gt.BorderSizePixel=0 gt.Font=Enum.Font.SourceSansBold gt.Text="Select Victim"gt.TextColor3=Color3.fromRGB(220,220,220)gt.TextSize=18 gt.Parent=gf 
+local gtc=Instance.new("UICorner")gtc.CornerRadius=UDim.new(0,6)gtc.Parent=gt
+
+local sf=Instance.new("ScrollingFrame")sf.Name="Scroll"sf.Size=UDim2.new(1,-8,1,-85)sf.Position=UDim2.new(0,4,0,38)sf.BackgroundTransparency=1 sf.ScrollBarThickness=6 sf.CanvasSize=UDim2.new(0,0,0,0)sf.Parent=gf
+
+local function upd()
+for _,ch in pairs(sf:GetChildren())do 
+if ch:IsA("TextButton")or ch:IsA("UIGridLayout")then ch:Destroy()end 
+end
+
+local gl=Instance.new("UIGridLayout")gl.CellSize=UDim2.new(0,85,0,100)gl.CellPadding=UDim2.new(0,6,0,6)gl.SortOrder=Enum.SortOrder.Name gl.Parent=sf 
+local ct=0
+
+for _,pl in pairs(ps:GetPlayers())do 
+if pl~=p and pl.Character then 
+ct=ct+1
+
+local pbt=Instance.new("TextButton")pbt.Name=pl.Name pbt.BackgroundColor3=Color3.fromRGB(40,40,40)pbt.BorderSizePixel=2 pbt.BorderColor3=Color3.fromRGB(80,80,80)pbt.Text=""pbt.Parent=sf 
+local pbc=Instance.new("UICorner")pbc.CornerRadius=UDim.new(0,6)pbc.Parent=pbt
+
+local av=Instance.new("ImageLabel")av.Size=UDim2.new(1,-10,0,65)av.Position=UDim2.new(0,5,0,5)av.BackgroundColor3=Color3.fromRGB(60,60,60)av.BorderSizePixel=0 
+local s,url=pcall(function()return ps:GetUserThumbnailAsync(pl.UserId,Enum.ThumbnailType.HeadShot,Enum.ThumbnailSize.Size150x150)end)
+av.Image=s and url or""
+av.Parent=pbt 
+local avc=Instance.new("UICorner")avc.CornerRadius=UDim.new(0,4)avc.Parent=av
+
+local nl=Instance.new("TextLabel")nl.Size=UDim2.new(1,-8,0,25)nl.Position=UDim2.new(0,4,1,-28)nl.BackgroundTransparency=1 nl.Font=Enum.Font.SourceSansBold nl.Text=pl.Name nl.TextColor3=Color3.fromRGB(230,230,230)nl.TextSize=12 nl.TextScaled=true nl.Parent=pbt
+
+pbt.MouseButton1Click:Connect(function()
+tg=pl 
+for _,cf in pairs(sf:GetChildren())do 
+if cf:IsA("TextButton")then 
+cf.BackgroundColor3=Color3.fromRGB(40,40,40)
+cf.BorderColor3=Color3.fromRGB(80,80,80)
+end 
+end 
+pbt.BackgroundColor3=Color3.fromRGB(120,15,15)
+pbt.BorderColor3=Color3.fromRGB(180,30,30)
+end)
+end 
+end
+
+sf.CanvasSize=UDim2.new(0,0,0,math.max(math.ceil(ct/4)*106,106))
+end 
+
+task.wait(.1)upd()
+ps.PlayerAdded:Connect(upd)
+ps.PlayerRemoving:Connect(upd)
+
+local kb=Instance.new("TextButton")kb.Size=UDim2.new(0,150,0,40)kb.Position=UDim2.new(.5,0,1,-45)kb.AnchorPoint=Vector2.new(.5,0)kb.BackgroundColor3=Color3.fromRGB(180,0,0)kb.BorderSizePixel=2 kb.BorderColor3=Color3.fromRGB(120,0,0)kb.Font=Enum.Font.SourceSansBold kb.Text="KILL"kb.TextColor3=Color3.fromRGB(255,255,255)kb.TextSize=22 kb.Parent=gf 
+local kbc=Instance.new("UICorner")kbc.CornerRadius=UDim.new(0,6)kbc.Parent=kb
+
+kb.MouseButton1Click:Connect(function()
+if tg and m and nb.Text~=""then 
+if nb.Text:lower()==tg.Name:lower()then 
+local tgt=tg 
+eff(tgt,m,tm or 5)
+task.wait(tm or 5)
+if tgt and tgt.Parent and tgt.Character then 
+tgt.Character:Destroy()
+end 
+rpov()
+tg,m,tm=nil,nil,nil 
+nb.Text=""
+upd()
+for _,cf in pairs(mc:GetChildren())do 
+if cf:IsA("Frame")then 
+local bt=cf:FindFirstChildOfClass("TextButton")
+if bt then bt.BackgroundColor3=Color3.fromRGB(50,50,50)end 
+end 
+end 
+end 
+end 
+end)
+
+ui=sg 
+return mf,rf
+end
+
+local function dbk()if b then pcall(function()b:Destroy()end)b=nil end end
+
+local function mbk()
+dbk()
+local bk=Instance.new("Model")bk.Name="Book"
+local s=Instance.new("Part")s.Name="S"s.Size=Vector3.new(.15,1.6,.2)s.Color=Color3.fromRGB(5,5,5)s.Material=Enum.Material.Fabric s.Anchored=true s.CanCollide=false s.CastShadow=false s.Parent=bk 
+bk.PrimaryPart=s
+
+for _,d in pairs({{"LC",-1,Color3.fromRGB(20,20,20),true},{"RC",1,Color3.fromRGB(20,20,20),true},{"LP",-1,Color3.fromRGB(250,240,230),false},{"RP",1,Color3.fromRGB(250,240,230),false}})do
+local pt=Instance.new("Part")pt.Name=d[1]pt.Size=d[4]and Vector3.new(1.2,1.6,.08)or Vector3.new(1.12,1.52,.04)pt.Color=d[3]pt.Material=d[4]and Enum.Material.Fabric or Enum.Material.SmoothPlastic pt.Anchored=true pt.CanCollide=false pt.CastShadow=false pt.Parent=bk 
+end
+
+bk.Parent=workspace.CurrentCamera 
+b=bk 
+return bk 
+end
+
+local function upb(op)
+if not b or not b.Parent or not c or not h then return end 
+local s=b:FindFirstChild("S")if not s then return end 
+local cf
+
+if op<.01 then 
+if eq then 
+local ra=c:FindFirstChild("Right Arm")or c:FindFirstChild("RightHand")or c:FindFirstChild("RightLowerArm")
+cf=(ra and ra.CFrame or h.CFrame*CFrame.new(.5,-.3,-.5))*CFrame.new(0,-.5,-.2)*CFrame.Angles(math.rad(-80),0,0)
+else 
+return 
+end 
+else 
+cf=h.CFrame*CFrame.new(0,.3,-3)*CFrame.Angles(math.rad(-40*op),0,0)
+end
+
+local oa=math.rad(60*op)
+s.CFrame=cf 
+local lc,rc,lp,rp=b:FindFirstChild("LC"),b:FindFirstChild("RC"),b:FindFirstChild("LP"),b:FindFirstChild("RP")
+
+if op<.01 then 
+if lc then lc.CFrame=cf*CFrame.new(0,0,-.05)end 
+if rc then rc.CFrame=cf*CFrame.new(0,0,.05)end 
+if lp then lp.CFrame=cf*CFrame.new(0,0,-.025)end 
+if rp then rp.CFrame=cf*CFrame.new(0,0,.025)end 
+else
+local lpv=cf*CFrame.new(-.075,0,0)
+local lrt=lpv*CFrame.Angles(0,oa,0)
+if lc then lc.CFrame=lrt*CFrame.new(-.6,0,0)end 
+if lp then lp.CFrame=lrt*CFrame.new(-.6,0,.06)end
+
+local rpv=cf*CFrame.new(.075,0,0)
+local rrt=rpv*CFrame.Angles(0,-oa,0)
+if rc then rc.CFrame=rrt*CFrame.new(.6,0,0)end 
+if rp then rp.CFrame=rrt*CFrame.new(.6,0,.06)end 
+end 
+end
+
+local function an(to)
+if cn then cn:Disconnect()cn=nil end 
+local st,ed,dur,el=o and 1 or 0,to and 1 or 0,.4,0
+
+cn=rs.RenderStepped:Connect(function(dt)
+el=el+dt 
+local pr=math.min(el/dur,1)
+local es=pr*pr*(3-2*pr)
+pcall(upb,st+(ed-st)*es)
+if pr>=1 then 
+if cn then cn:Disconnect()end 
+cn=rs.RenderStepped:Connect(function()pcall(upb,ed)end)
+end 
+end)
+end
+
+local function tog()
+if not eq then return end 
+o=not o 
+an(o)
+if ui then 
+local mf=ui:FindFirstChild("Main")
+if mf then mf.Visible=o end 
+end 
+end
+
+local function mkt()
+local tl=Instance.new("Tool")tl.Name="Death Note"tl.RequiresHandle=true tl.CanBeDropped=false 
+local hn=Instance.new("Part")hn.Name="Handle"hn.Size=Vector3.new(.4,.8,.2)hn.Transparency=1 hn.CanCollide=false hn.Parent=tl 
+return tl 
+end
+
+local function stp()
+if t then pcall(function()t:Destroy()end)t=nil end 
+t=mkt()
+local bp=p:WaitForChild("Backpack",10)if not bp then return end 
+t.Parent=bp 
+local mf,rf=mkui()
+
+t.Equipped:Connect(function()
+eq=true 
+mbk()
+if cn then cn:Disconnect()end 
+cn=rs.RenderStepped:Connect(function()pcall(upb,o and 1 or 0)end)
+
+-- Show rules only once
+if not rulesShown and rf then
+rf.Visible=true
+rulesShown=true
+end
+end)
+
+t.Unequipped:Connect(function()
+eq=false 
+o=false 
+if cn then cn:Disconnect()cn=nil end 
+dbk()
+if ui then 
+local mf=ui:FindFirstChild("Main")
+if mf then mf.Visible=false end 
+end 
+end)
+
+t.Activated:Connect(tog)
+end
+
+task.wait(1)
+stp()
+
+p.CharacterAdded:Connect(function(nc)
+c=nc 
+h=c:WaitForChild("HumanoidRootPart")
+if cn then cn:Disconnect()cn=nil end 
+dbk()
+if t then pcall(function()t:Destroy()end)end 
+o,eq,tg,m,tm=false,false,nil,nil,nil 
+rulesShown=false
+task.wait(1)
+stp()
+end)           
