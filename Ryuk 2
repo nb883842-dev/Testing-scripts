@@ -50,14 +50,18 @@ task.spawn(function()for i=1,10 do ts:Create(fl,TweenInfo.new(.3),{BackgroundTra
 elseif f=="Seizure"then 
 snd("Seizure")
 local fl=Instance.new("Frame")fl.Size=UDim2.new(1,0,1,0)fl.BackgroundColor3=Color3.fromRGB(255,255,255)fl.BackgroundTransparency=1 fl.BorderSizePixel=0 fl.Parent=fr
-task.spawn(function()for i=1,38 do ts:Create(fl,TweenInfo.new(.08),{BackgroundTransparency=.3,BackgroundColor3=Color3.fromRGB(math.random(0,255),math.random(0,255),math.random(0,255))}):Play()task.wait(.08)end sg:Destroy()end)
+task.spawn(function()for i=1,38 do ts:Create(fl,TweenInfo.new(.08),{BackgroundTransparency=math.random(0,1)>.5 and .3 or 1}):Play()task.wait(.08)end sg:Destroy()end)
 end 
 end
 
 local function pov(tp)if not tp or not tp.Character then return end local cam=workspace.CurrentCamera oc=cam.CameraType cam.CameraType=Enum.CameraType.Custom cam.CameraSubject=tp.Character:FindFirstChild("Humanoid")vt=true end
 local function rpov()if not vt then return end local cam=workspace.CurrentCamera cam.CameraType=oc or Enum.CameraType.Custom cam.CameraSubject=c:FindFirstChild("Humanoid")vt=false end
 
-local function eff(pl,mt,ti)if not pl or not pl.Character then return end local ch=pl.Character local hm=ch:FindFirstChildWhichIsA("Humanoid")
+local function eff(pl,mt,ti)
+if not pl or not pl.Character then return end 
+local ch=pl.Character 
+local hm=ch:FindFirstChildWhichIsA("Humanoid")
+pov(pl)
 
 if mt=="Heart Attack"then 
 fx("Heart Attack")
@@ -77,18 +81,18 @@ elseif mt=="Poison"then
 fx("Poison")
 task.spawn(function()
 if hm then hm.WalkSpeed=hm.WalkSpeed*.3 end 
-for i=1,ti*2 do 
+local dur=ti
+for i=1,dur*2 do 
 if not ch or not ch.Parent then break end 
 for _,pt in pairs(ch:GetDescendants())do if pt:IsA("BasePart")then pt.Color=Color3.fromRGB(50,255,100)end end 
 task.wait(.3)
 end 
-task.wait(3)
 end)
 
 elseif mt=="Accident"then 
 fx("Accident")
 task.spawn(function()
-local dur,el=4,0 
+local dur,el=ti,0 
 if hm then hm.PlatformStand=true end 
 while el<dur and ch and ch.Parent do 
 if ch then 
@@ -102,12 +106,17 @@ end
 task.wait(.2)
 el=el+.2 
 end 
+if ch and hm then
+hm.PlatformStand=false
+for _,pt in pairs(ch:GetDescendants())do if pt:IsA("BasePart")then pt.Anchored=false end end
+ch:BreakJoints()
+end
 end)
 
 elseif mt=="Seizure"then 
 fx("Seizure")
 task.spawn(function()
-local dur,el=3,0 
+local dur,el=ti,0 
 if hm then hm.PlatformStand=true end 
 while el<dur and ch and ch.Parent do 
 if ch then 
@@ -120,13 +129,9 @@ end
 task.wait(.08)
 el=el+.08 
 end
-if ch and ch:FindFirstChildWhichIsA("Humanoid")then
-ch:FindFirstChildWhichIsA("Humanoid").PlatformStand=false
-for _,pt in pairs(ch:GetDescendants())do 
-if pt:IsA("BasePart")then 
-pt.Anchored=false
-end
-end
+if ch and hm then
+hm.PlatformStand=false
+for _,pt in pairs(ch:GetDescendants())do if pt:IsA("BasePart")then pt.Anchored=false end end
 ch:BreakJoints()
 end
 end)
@@ -136,7 +141,8 @@ fx("Burning")
 task.spawn(function()
 local fire=Instance.new("Fire")fire.Size=10 fire.Heat=15 
 local r=ch:FindFirstChild("HumanoidRootPart")if r then fire.Parent=r end 
-for i=1,4 do 
+local dur=ti
+for i=1,dur*2 do 
 if not ch or not ch.Parent then break end 
 for _,pt in pairs(ch:GetDescendants())do 
 if pt:IsA("BasePart")then 
@@ -151,7 +157,8 @@ elseif mt=="Drowning"then
 fx("Drowning")
 task.spawn(function()
 if hm then hm.WalkSpeed=0 end 
-for i=1,10 do 
+local dur=ti
+for i=1,dur*3 do 
 if not ch or not ch.Parent then break end 
 for _,pt in pairs(ch:GetDescendants())do 
 if pt:IsA("BasePart")then 
@@ -166,7 +173,7 @@ end)
 elseif mt=="Explosion"then 
 fx("Explosion")
 task.spawn(function()
-task.wait(1)
+task.wait(ti)
 local r=ch:FindFirstChild("HumanoidRootPart")
 if r then 
 local exp=Instance.new("Explosion")
@@ -314,11 +321,13 @@ kb.MouseButton1Click:Connect(function()
 if tg and m and nb.Text~=""then 
 if nb.Text:lower()==tg.Name:lower()then 
 local tgt=tg 
-eff(tgt,m,tm or 5)
-task.wait(tm or 5)
+local killTime=tm or 5
+eff(tgt,m,killTime)
+task.wait(killTime)
 if tgt and tgt.Parent and tgt.Character then 
 tgt.Character:Destroy()
 end 
+task.wait(3)
 rpov()
 tg,m,tm=nil,nil,nil 
 nb.Text=""
@@ -424,10 +433,63 @@ local hn=Instance.new("Part")hn.Name="Handle"hn.Size=Vector3.new(.4,.8,.2)hn.Tra
 return tl 
 end
 
-local function stp()
-if t then pcall(function()t:Destroy()end)t=nil end 
-t=mkt()
+local function spawnBook()
+-- Chat message
+game.StarterGui:SetCore("ChatMakeSystemMessage",{Text="The Death Note is nearby...",Color=Color3.fromRGB(255,0,0),Font=Enum.Font.SourceSansBold,FontSize=Enum.FontSize.Size24})
+
+-- Create world book model
+local bkModel=Instance.new("Model")bkModel.Name="DeathNoteSpawn"
+local s=Instance.new("Part")s.Name="Spine"s.Size=Vector3.new(.3,2,.4)s.Color=Color3.fromRGB(5,5,5)s.Material=Enum.Material.Fabric s.Anchored=true s.CanCollide=true s.Parent=bkModel 
+bkModel.PrimaryPart=s
+
+local lc=Instance.new("Part")lc.Name="LeftCover"lc.Size=Vector3.new(1.8,2,.15)lc.Color=Color3.fromRGB(20,20,20)lc.Material=Enum.Material.Fabric lc.Anchored=true lc.CanCollide=false lc.Parent=bkModel
+local rc=Instance.new("Part")rc.Name="RightCover"rc.Size=Vector3.new(1.8,2,.15)rc.Color=Color3.fromRGB(20,20,20)rc.Material=Enum.Material.Fabric rc.Anchored=true rc.CanCollide=false rc.Parent=bkModel
+
+local pos=h.CFrame*CFrame.new(0,10,5)
+s.CFrame=pos
+lc.CFrame=pos*CFrame.new(-.95,0,0)
+rc.CFrame=pos*CFrame.new(.95,0,0)
+
+bkModel.Parent=workspace
+
+-- Float down animation
+task.spawn(function()
+for i=1,100 do
+if not bkModel or not bkModel.Parent then break end
+local newPos=pos*CFrame.new(0,-i*.08,0)
+s.CFrame=newPos
+lc.CFrame=newPos*CFrame.new(-.95,0,0)
+rc.CFrame=newPos*CFrame.new(.95,0,0)
+task.wait(.03)
+end
+end)
+
+-- Proximity check
+local prox=Instance.new("Part")prox.Size=Vector3.new(10,10,10)prox.Transparency=1 prox.CanCollide=false prox.Anchored=true prox.CFrame=pos prox.Parent=bkModel
+
+local acquired=false
+rs.Heartbeat:Connect(function()
+if acquired or not bkModel or not bkModel.Parent or not c or not h then return end
+local dist=(h.Position-prox.Position).Magnitude
+if dist<8 then
+acquired=true
+-- Destroy world book
+if bkModel then bkModel:Destroy()end
+
+-- Show acquisition message
+local sg=Instance.new("ScreenGui")sg.Name="Acquired"sg.ResetOnSpawn=false sg.Parent=p.PlayerGui
+local msg=Instance.new("TextLabel")msg.Size=UDim2.new(0,600,0,80)msg.Position=UDim2.new(.5,0,.5,0)msg.AnchorPoint=Vector2.new(.5,.5)msg.BackgroundTransparency=1 msg.Font=Enum.Font.Creepster msg.Text="You have acquired the Death Note"msg.TextColor3=Color3.fromRGB(255,0,0)msg.TextSize=36 msg.TextStrokeTransparency=0 msg.TextStrokeColor3=Color3.fromRGB(0,0,0)msg.TextTransparency=0 msg.Parent=sg
+
+task.spawn(function()
+task.wait(3)
+ts:Create(msg,TweenInfo.new(1),{TextTransparency=1,TextStrokeTransparency=1}):Play()
+task.wait(1)
+sg:Destroy()
+end)
+
+-- Give tool
 local bp=p:WaitForChild("Backpack",10)if not bp then return end 
+t=mkt()
 t.Parent=bp 
 local mf,rf=mkui()
 
@@ -437,7 +499,6 @@ mbk()
 if cn then cn:Disconnect()end 
 cn=rs.RenderStepped:Connect(function()pcall(upb,o and 1 or 0)end)
 
--- Show rules only once
 if not rulesShown and rf then
 rf.Visible=true
 rulesShown=true
@@ -457,9 +518,11 @@ end)
 
 t.Activated:Connect(tog)
 end
+end)
+end
 
-task.wait(1)
-stp()
+task.wait(2)
+spawnBook()
 
 p.CharacterAdded:Connect(function(nc)
 c=nc 
@@ -469,6 +532,4 @@ dbk()
 if t then pcall(function()t:Destroy()end)end 
 o,eq,tg,m,tm=false,false,nil,nil,nil 
 rulesShown=false
-task.wait(1)
-stp()
-end)           
+end)
