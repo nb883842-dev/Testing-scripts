@@ -1,0 +1,592 @@
+-- LocalScript - Place this in StarterPlayer > StarterCharacterScripts
+
+local player = game.Players.LocalPlayer
+local character = script.Parent
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+local isOpen = false
+local bookModel = nil
+local updateConnection = nil
+local tool = nil
+local isEquipped = false
+local deathNoteUI = nil
+
+local selectedMethod = nil
+local selectedTime = nil
+local selectedPlayer = nil
+
+local pageWidth = 1.2
+local pageThickness = 0.04
+local pageHeight = 1.6
+local coverThickness = 0.08
+local spineWidth = 0.15
+
+local function createTool()
+	local newTool = Instance.new("Tool")
+	newTool.Name = "Black Book"
+	newTool.RequiresHandle = true
+	newTool.CanBeDropped = false
+	
+	local handlePart = Instance.new("Part")
+	handlePart.Name = "Handle"
+	handlePart.Size = Vector3.new(0.4, 0.8, 0.2)
+	handlePart.Transparency = 0.5
+	handlePart.CanCollide = false
+	handlePart.Color = Color3.fromRGB(20, 20, 20)
+	handlePart.Material = Enum.Material.SmoothPlastic
+	handlePart.Parent = newTool
+	
+	return newTool
+end
+
+local function createDeathNoteUI()
+	if deathNoteUI then
+		deathNoteUI:Destroy()
+		deathNoteUI = nil
+	end
+	
+	local playerGui = player:WaitForChild("PlayerGui")
+	
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = "DeathNoteUI"
+	screenGui.ResetOnSpawn = false
+	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	screenGui.Parent = playerGui
+	
+	local mainFrame = Instance.new("Frame")
+	mainFrame.Name = "MainFrame"
+	mainFrame.Size = UDim2.new(0, 400, 0, 500)
+	mainFrame.Position = UDim2.new(0.5, -200, 0.5, -250)
+	mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+	mainFrame.BorderSizePixel = 2
+	mainFrame.BorderColor3 = Color3.fromRGB(200, 200, 200)
+	mainFrame.Visible = false
+	mainFrame.Active = true
+	mainFrame.Draggable = true
+	mainFrame.Parent = screenGui
+	
+	local titleBar = Instance.new("TextLabel")
+	titleBar.Size = UDim2.new(1, 0, 0, 30)
+	titleBar.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	titleBar.BorderSizePixel = 0
+	titleBar.Font = Enum.Font.SourceSansBold
+	titleBar.Text = "DEATH NOTE"
+	titleBar.TextColor3 = Color3.fromRGB(255, 255, 255)
+	titleBar.TextSize = 18
+	titleBar.Parent = mainFrame
+	
+	local paperBg = Instance.new("Frame")
+	paperBg.Name = "Paper"
+	paperBg.Size = UDim2.new(1, -20, 0, 200)
+	paperBg.Position = UDim2.new(0, 10, 0, 40)
+	paperBg.BackgroundColor3 = Color3.fromRGB(240, 230, 210)
+	paperBg.BorderSizePixel = 0
+	paperBg.Parent = mainFrame
+	
+	local nameBox = Instance.new("TextBox")
+	nameBox.Name = "NameBox"
+	nameBox.Size = UDim2.new(0.9, 0, 0, 35)
+	nameBox.Position = UDim2.new(0.05, 0, 0, 10)
+	nameBox.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	nameBox.BorderColor3 = Color3.fromRGB(0, 0, 0)
+	nameBox.BorderSizePixel = 2
+	nameBox.Font = Enum.Font.SourceSans
+	nameBox.PlaceholderText = "Enter name..."
+	nameBox.Text = ""
+	nameBox.TextColor3 = Color3.fromRGB(0, 0, 0)
+	nameBox.TextSize = 16
+	nameBox.ClearTextOnFocus = false
+	nameBox.Parent = paperBg
+local toggleBtn = Instance.new("TextButton")
+	toggleBtn.Name = "ToggleButton"
+	toggleBtn.Size = UDim2.new(0.9, 0, 0, 30)
+	toggleBtn.Position = UDim2.new(0.05, 0, 0, 55)
+	toggleBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+	toggleBtn.BorderSizePixel = 0
+	toggleBtn.Font = Enum.Font.SourceSansBold
+	toggleBtn.Text = "▼ Death Methods"
+	toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	toggleBtn.TextSize = 14
+	toggleBtn.AutoButtonColor = true
+	toggleBtn.Parent = paperBg
+	
+	local methodsContainer = Instance.new("Frame")
+	methodsContainer.Name = "MethodsContainer"
+	methodsContainer.Size = UDim2.new(0.9, 0, 0, 140)
+	methodsContainer.Position = UDim2.new(0.05, 0, 0, 92)
+	methodsContainer.BackgroundTransparency = 1
+	methodsContainer.Visible = false
+	methodsContainer.ClipsDescendants = true
+	methodsContainer.Parent = paperBg
+	
+	local methods = {"Heart Attack", "Poison", "Accident", "Seizure"}
+	
+	for i, method in ipairs(methods) do
+		local methodFrame = Instance.new("Frame")
+		methodFrame.Size = UDim2.new(1, 0, 0, 30)
+		methodFrame.Position = UDim2.new(0, 0, 0, (i - 1) * 35)
+		methodFrame.BackgroundTransparency = 1
+		methodFrame.Parent = methodsContainer
+		
+		local methodBtn = Instance.new("TextButton")
+		methodBtn.Name = method
+		methodBtn.Size = UDim2.new(0.6, -5, 1, 0)
+		methodBtn.Position = UDim2.new(0, 0, 0, 0)
+		methodBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+		methodBtn.BorderSizePixel = 0
+		methodBtn.Font = Enum.Font.SourceSans
+		methodBtn.Text = method
+		methodBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		methodBtn.TextSize = 13
+		methodBtn.AutoButtonColor = true
+		methodBtn.Parent = methodFrame
+		
+		local timeBox = Instance.new("TextBox")
+		timeBox.Name = "TimeBox"
+		timeBox.Size = UDim2.new(0.4, -5, 1, 0)
+		timeBox.Position = UDim2.new(0.6, 5, 0, 0)
+		timeBox.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+		timeBox.BorderSizePixel = 1
+		timeBox.Font = Enum.Font.SourceSans
+		timeBox.PlaceholderText = "Time (s)"
+		timeBox.Text = "5"
+		timeBox.TextColor3 = Color3.fromRGB(0, 0, 0)
+		timeBox.TextSize = 13
+		timeBox.ClearTextOnFocus = false
+		timeBox.Parent = methodFrame
+		
+		methodBtn.MouseButton1Click:Connect(function()
+			selectedMethod = method
+			local timeValue = tonumber(timeBox.Text)
+			selectedTime = (timeValue and timeValue > 0) and timeValue or 5
+			
+			for _, child in pairs(methodsContainer:GetChildren()) do
+				if child:IsA("Frame") then
+					local btn = child:FindFirstChildOfClass("TextButton")
+					if btn then
+						btn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+					end
+				end
+			end
+			methodBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+		end)
+	end
+	
+	toggleBtn.MouseButton1Click:Connect(function()
+		methodsContainer.Visible = not methodsContainer.Visible
+		toggleBtn.Text = methodsContainer.Visible and "▲ Death Methods" or "▼ Death Methods"
+	end)
+	
+	local gridFrame = Instance.new("Frame")
+	gridFrame.Name = "GridFrame"
+	gridFrame.Size = UDim2.new(1, -20, 0, 200)
+	gridFrame.Position = UDim2.new(0, 10, 0, 250)
+	gridFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	gridFrame.BorderSizePixel = 0
+	gridFrame.Parent = mainFrame
+	
+	local gridTitle = Instance.new("TextLabel")
+	gridTitle.Size = UDim2.new(1, 0, 0, 25)
+	gridTitle.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+	gridTitle.BorderSizePixel = 0
+	gridTitle.Font = Enum.Font.SourceSansBold
+	gridTitle.Text = "Select Target"
+	gridTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+	gridTitle.TextSize = 14
+	gridTitle.Parent = gridFrame
+	
+	local scrollFrame = Instance.new("ScrollingFrame")
+	scrollFrame.Name = "PlayerScroll"
+	scrollFrame.Size = UDim2.new(1, -10, 1, -70)
+	scrollFrame.Position = UDim2.new(0, 5, 0, 30)
+	scrollFrame.BackgroundTransparency = 1
+	scrollFrame.BorderSizePixel = 0
+	scrollFrame.ScrollBarThickness = 6
+	scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+	scrollFrame.Parent = gridFrame
+	
+	local function updatePlayerGrid()
+		for _, child in pairs(scrollFrame:GetChildren()) do
+			if child:IsA("TextButton") or child:IsA("UIGridLayout") then
+				child:Destroy()
+			end
+		end
+		
+		local gridLayout = Instance.new("UIGridLayout")
+		gridLayout.CellSize = UDim2.new(0, 80, 0, 100)
+		gridLayout.CellPadding = UDim2.new(0, 5, 0, 5)
+		gridLayout.SortOrder = Enum.SortOrder.Name
+		gridLayout.Parent = scrollFrame
+		
+		local playerCount = 0
+		for _, plr in pairs(Players:GetPlayers()) do
+			if plr ~= player then
+				playerCount = playerCount + 1
+				
+				local playerBtn = Instance.new("TextButton")
+				playerBtn.Name = plr.Name
+				playerBtn.Size = UDim2.new(0, 80, 0, 100)
+				playerBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+				playerBtn.BorderSizePixel = 0
+				playerBtn.Text = ""
+				playerBtn.AutoButtonColor = true
+				playerBtn.Parent = scrollFrame
+				
+				local success, thumbnailUrl = pcall(function()
+					return Players:GetUserThumbnailAsync(plr.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
+				end)
+				
+				local avatar = Instance.new("ImageLabel")
+				avatar.Size = UDim2.new(1, -6, 0, 60)
+				avatar.Position = UDim2.new(0, 3, 0, 3)
+				avatar.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+				avatar.BorderSizePixel = 1
+				avatar.Image = success and thumbnailUrl or ""
+				avatar.Parent = playerBtn
+				
+				local nameLabel = Instance.new("TextLabel")
+				nameLabel.Size = UDim2.new(1, -4, 0, 30)
+				nameLabel.Position = UDim2.new(0, 2, 1, -33)
+				nameLabel.BackgroundTransparency = 1
+				nameLabel.Font = Enum.Font.SourceSansBold
+				nameLabel.Text = plr.Name
+				nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+				nameLabel.TextSize = 10
+				nameLabel.TextScaled = true
+				nameLabel.TextWrapped = true
+				nameLabel.Parent = playerBtn
+				
+				playerBtn.MouseButton1Click:Connect(function()
+					selectedPlayer = plr
+					for _, child in pairs(scrollFrame:GetChildren()) do
+						if child:IsA("TextButton") then
+							child.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+						end
+					end
+					playerBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 50)
+				end)
+			end
+		end
+		
+		local rows = math.ceil(playerCount / 4)
+		scrollFrame.CanvasSize = UDim2.new(0, 0, 0, math.max(rows * 105, 100))
+	end
+	
+	task.wait(0.1)
+	updatePlayerGrid()
+	
+	Players.PlayerAdded:Connect(updatePlayerGrid)
+	Players.PlayerRemoving:Connect(updatePlayerGrid)
+local killBtn = Instance.new("TextButton")
+	killBtn.Size = UDim2.new(0, 120, 0, 35)
+	killBtn.Position = UDim2.new(0.5, -60, 1, -40)
+	killBtn.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
+	killBtn.BorderSizePixel = 0
+	killBtn.Font = Enum.Font.SourceSansBold
+	killBtn.Text = "KILL"
+	killBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	killBtn.TextSize = 20
+	killBtn.AutoButtonColor = true
+	killBtn.Parent = gridFrame
+	
+	killBtn.MouseButton1Click:Connect(function()
+		local targetName = nameBox.Text
+		
+		if selectedPlayer and selectedMethod and targetName ~= "" then
+			if targetName:lower() == selectedPlayer.Name:lower() then
+				local targetPlayer = selectedPlayer
+				task.wait(selectedTime or 5)
+				
+				if targetPlayer and targetPlayer.Parent and targetPlayer.Character then
+					local humanoid = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+					if humanoid then
+						humanoid.Health = 0
+					end
+				end
+				
+				selectedPlayer = nil
+				selectedMethod = nil
+				selectedTime = nil
+				nameBox.Text = ""
+				updatePlayerGrid()
+			end
+		end
+	end)
+	
+	deathNoteUI = screenGui
+	return mainFrame
+end
+
+local function destroyBook()
+	if bookModel then
+		pcall(function()
+			if bookModel.Parent then
+				bookModel:Destroy()
+			end
+		end)
+		bookModel = nil
+	end
+end
+
+local function createBook()
+	destroyBook()
+	
+	local book = Instance.new("Model")
+	book.Name = "MagicBook"
+	
+	local spine = Instance.new("Part")
+	spine.Name = "Spine"
+	spine.Size = Vector3.new(spineWidth, pageHeight, 0.2)
+	spine.Color = Color3.fromRGB(5, 5, 5)
+	spine.Material = Enum.Material.Fabric
+	spine.Anchored = true
+	spine.CanCollide = false
+	spine.CastShadow = false
+	spine.Parent = book
+	
+	book.PrimaryPart = spine
+	
+	local leftCover = Instance.new("Part")
+	leftCover.Name = "LeftCover"
+	leftCover.Size = Vector3.new(pageWidth, pageHeight, coverThickness)
+	leftCover.Color = Color3.fromRGB(20, 20, 20)
+	leftCover.Material = Enum.Material.Fabric
+	leftCover.Anchored = true
+	leftCover.CanCollide = false
+	leftCover.CastShadow = false
+	leftCover.Parent = book
+	
+	local rightCover = Instance.new("Part")
+	rightCover.Name = "RightCover"
+	rightCover.Size = Vector3.new(pageWidth, pageHeight, coverThickness)
+	rightCover.Color = Color3.fromRGB(20, 20, 20)
+	rightCover.Material = Enum.Material.Fabric
+	rightCover.Anchored = true
+	rightCover.CanCollide = false
+	rightCover.CastShadow = false
+	rightCover.Parent = book
+	
+	local leftPage = Instance.new("Part")
+	leftPage.Name = "LeftPage"
+	leftPage.Size = Vector3.new(pageWidth - 0.08, pageHeight - 0.08, pageThickness)
+	leftPage.Color = Color3.fromRGB(250, 240, 230)
+	leftPage.Material = Enum.Material.SmoothPlastic
+	leftPage.Anchored = true
+	leftPage.CanCollide = false
+	leftPage.CastShadow = false
+	leftPage.Parent = book
+	
+	local rightPage = Instance.new("Part")
+	rightPage.Name = "RightPage"
+	rightPage.Size = Vector3.new(pageWidth - 0.08, pageHeight - 0.08, pageThickness)
+	rightPage.Color = Color3.fromRGB(250, 240, 230)
+	rightPage.Material = Enum.Material.SmoothPlastic
+	rightPage.Anchored = true
+	rightPage.CanCollide = false
+	rightPage.CastShadow = false
+	rightPage.Parent = book
+	
+	book.Parent = workspace.CurrentCamera
+	bookModel = book
+	return book
+end
+
+local function updateBookPosition(openProgress)
+	if not bookModel or not bookModel.Parent then return end
+	if not character or not character.Parent then return end
+	if not humanoidRootPart or not humanoidRootPart.Parent then return end
+	
+	local spine = bookModel:FindFirstChild("Spine")
+	local leftCover = bookModel:FindFirstChild("LeftCover")
+	local rightCover = bookModel:FindFirstChild("RightCover")
+	local leftPage = bookModel:FindFirstChild("LeftPage")
+	local rightPage = bookModel:FindFirstChild("RightPage")
+	
+	if not spine then return end
+	
+	local bookCFrame
+	
+	if openProgress < 0.01 then
+		if isEquipped then
+			local rightArm = character:FindFirstChild("Right Arm") or character:FindFirstChild("RightHand") or character:FindFirstChild("RightLowerArm")
+			if rightArm and rightArm.Parent then
+				bookCFrame = rightArm.CFrame * CFrame.new(0, -0.5, -0.2) * CFrame.Angles(math.rad(-80), 0, 0)
+			else
+				bookCFrame = humanoidRootPart.CFrame * CFrame.new(0.5, -0.3, -0.5) * CFrame.Angles(math.rad(-80), 0, 0)
+			end
+		else
+			return
+		end
+	else
+		local dist = 3
+		local height = 0.3
+		bookCFrame = humanoidRootPart.CFrame * CFrame.new(0, height, -dist) * CFrame.Angles(math.rad(-40 * openProgress), 0, 0)
+	end
+	
+	local openAngle = math.rad(60 * openProgress)
+	spine.CFrame = bookCFrame
+	
+	if openProgress < 0.01 then
+		if leftCover then
+			leftCover.CFrame = bookCFrame * CFrame.new(0, 0, -coverThickness/2 - 0.01)
+		end
+		if rightCover then
+			rightCover.CFrame = bookCFrame * CFrame.new(0, 0, coverThickness/2 + 0.01)
+		end
+		if leftPage then
+			leftPage.CFrame = bookCFrame * CFrame.new(0, 0, -pageThickness/2 - 0.005)
+		end
+		if rightPage then
+			rightPage.CFrame = bookCFrame * CFrame.new(0, 0, pageThickness/2 + 0.005)
+		end
+	else
+		local leftPivot = bookCFrame * CFrame.new(-spineWidth/2, 0, 0)
+		local leftRotated = leftPivot * CFrame.Angles(0, openAngle, 0)
+		
+		if leftCover then
+			leftCover.CFrame = leftRotated * CFrame.new(-pageWidth/2, 0, 0)
+		end
+		if leftPage then
+			leftPage.CFrame = leftRotated * CFrame.new(-pageWidth/2, 0, coverThickness/2 + pageThickness/2 + 0.01)
+		end
+		
+		local rightPivot = bookCFrame * CFrame.new(spineWidth/2, 0, 0)
+		local rightRotated = rightPivot * CFrame.Angles(0, -openAngle, 0)
+		
+		if rightCover then
+			rightCover.CFrame = rightRotated * CFrame.new(pageWidth/2, 0, 0)
+		end
+		if rightPage then
+			rightPage.CFrame = rightRotated * CFrame.new(pageWidth/2, 0, coverThickness/2 + pageThickness/2 + 0.01)
+		end
+	end
+end
+
+local function animateBook(targetOpen)
+	if updateConnection then
+		updateConnection:Disconnect()
+		updateConnection = nil
+	end
+	
+	local startProgress = isOpen and 1 or 0
+	local endProgress = targetOpen and 1 or 0
+	local duration = 0.6
+	local elapsed = 0
+	
+	updateConnection = RunService.RenderStepped:Connect(function(dt)
+		elapsed = elapsed + dt
+		local progress = math.min(elapsed / duration, 1)
+		local eased = progress * progress * (3 - 2 * progress)
+		local currentProgress = startProgress + (endProgress - startProgress) * eased
+		
+		pcall(function()
+			updateBookPosition(currentProgress)
+		end)
+		
+		if progress >= 1 then
+			if updateConnection then
+				updateConnection:Disconnect()
+			end
+			updateConnection = RunService.RenderStepped:Connect(function()
+				pcall(function()
+					updateBookPosition(endProgress)
+				end)
+			end)
+		end
+	end)
+end
+
+local function toggleBook()
+	if not isEquipped then return end
+	
+	isOpen = not isOpen
+	animateBook(isOpen)
+	
+	if deathNoteUI then
+		local mainFrame = deathNoteUI:FindFirstChild("MainFrame")
+		if mainFrame then
+			mainFrame.Visible = isOpen
+		end
+	end
+end
+
+local function setupTool()
+	if tool then
+		pcall(function() tool:Destroy() end)
+		tool = nil
+	end
+	
+	tool = createTool()
+	
+	local backpack = player:WaitForChild("Backpack", 5)
+	if not backpack then return end
+	
+	tool.Parent = backpack
+	createDeathNoteUI()
+	
+	tool.Equipped:Connect(function()
+		isEquipped = true
+		task.wait(0.1)
+		createBook()
+		
+		if updateConnection then
+			updateConnection:Disconnect()
+		end
+		updateConnection = RunService.RenderStepped:Connect(function()
+			pcall(function()
+				updateBookPosition(isOpen and 1 or 0)
+			end)
+		end)
+	end)
+	
+	tool.Unequipped:Connect(function()
+		isEquipped = false
+		isOpen = false
+		
+		if updateConnection then
+			updateConnection:Disconnect()
+			updateConnection = nil
+		end
+		
+		destroyBook()
+		
+		if deathNoteUI then
+			local mainFrame = deathNoteUI:FindFirstChild("MainFrame")
+			if mainFrame then
+				mainFrame.Visible = false
+			end
+		end
+	end)
+	
+	tool.Activated:Connect(toggleBook)
+end
+
+task.wait(1)
+setupTool()
+
+player.CharacterAdded:Connect(function(newChar)
+	character = newChar
+	humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+	
+	if updateConnection then
+		updateConnection:Disconnect()
+		updateConnection = nil
+	end
+	destroyBook()
+	if tool then
+		pcall(function() tool:Destroy() end)
+	end
+	
+	isOpen = false
+	isEquipped = false
+	selectedPlayer = nil
+	selectedMethod = nil
+	selectedTime = nil
+	
+	task.wait(1)
+	setupTool()
+end)
