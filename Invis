@@ -660,3 +660,44 @@ toggleButton.MouseButton1Click:Connect(function()
 		-- Get initial camera angle
 		local camLook = camera.CFrame.LookVector
 		cameraAngleX = math.deg(math.atan2(camLook.X, camLook.Z))
+		cameraAngleY = math.deg(math.asin(-camLook.Y))
+
+		activateGhostMode()
+		setupCameraControl()
+	else
+		toggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+		toggleButton.Text = "GHOST: OFF"
+		statusDot.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+		frameStroke.Color = Color3.fromRGB(80, 80, 100)
+
+		deactivateGhostMode()
+	end
+
+	task.wait(0.5)
+	debounce = false
+end)
+
+-------------------------------------------------
+-- RESPAWN HANDLING
+-------------------------------------------------
+player.CharacterAdded:Connect(function(character)
+	character:WaitForChild("Humanoid")
+	task.wait(1)
+
+	if ghostModeActive then
+		-- Re-setup after respawn
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		local rootPart = character:FindFirstChild("HumanoidRootPart")
+
+		if rootPart and humanoid then
+			createHiddenPlatform()
+			rootPart.CFrame = CFrame.new(0, UNDERGROUND_DEPTH + 5, 0)
+			humanoid.WalkSpeed = 0
+			humanoid.JumpPower = 0
+			humanoid.JumpHeight = 0
+
+			camera.CameraType = Enum.CameraType.Scriptable
+			setupCameraControl()
+		end
+	end
+end)
