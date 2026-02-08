@@ -1,0 +1,662 @@
+-- LocalScript: Ghost Mode Invisibility System
+-- Place in StarterGui
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+
+local player = Players.LocalPlayer
+local camera = Workspace.CurrentCamera
+
+local ghostModeActive = false
+local ghostClone = nil
+local hiddenPlatform = nil
+local originalPosition = nil
+local renderConnection = nil
+local moveConnection = nil
+
+local UNDERGROUND_DEPTH = -500
+local PLATFORM_SIZE = Vector3.new(200, 5, 200)
+
+-------------------------------------------------
+-- CREATE GUI
+-------------------------------------------------
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "GhostModeGui"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local dragFrame = Instance.new("Frame")
+dragFrame.Name = "DragFrame"
+dragFrame.Size = UDim2.new(0, 150, 0, 55)
+dragFrame.Position = UDim2.new(0.5, -75, 0.85, -27)
+dragFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+dragFrame.BackgroundTransparency = 0.05
+dragFrame.BorderSizePixel = 0
+dragFrame.Active = true
+dragFrame.ZIndex = 10
+dragFrame.Parent = screenGui
+
+local frameCorner = Instance.new("UICorner")
+frameCorner.CornerRadius = UDim.new(0, 14)
+frameCorner.Parent = dragFrame
+
+local frameStroke = Instance.new("UIStroke")
+frameStroke.Color = Color3.fromRGB(80, 80, 100)
+frameStroke.Thickness = 2
+frameStroke.Parent = dragFrame
+
+local statusDot = Instance.new("Frame")
+statusDot.Size = UDim2.new(0, 12, 0, 12)
+statusDot.Position = UDim2.new(0, 10, 0.5, -6)
+statusDot.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+statusDot.BorderSizePixel = 0
+statusDot.ZIndex = 11
+statusDot.Parent = dragFrame
+
+local dotCorner = Instance.new("UICorner")
+dotCorner.CornerRadius = UDim.new(1, 0)
+dotCorner.Parent = statusDot
+
+local toggleButton = Instance.new("TextButton")
+toggleButton.Name = "ToggleButton"
+toggleButton.Size = UDim2.new(1, -35, 1, -10)
+toggleButton.Position = UDim2.new(0, 28, 0, 5)
+toggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+toggleButton.Text = "GHOST: OFF"
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.Font = Enum.Font.GothamBold
+toggleButton.TextSize = 14
+toggleButton.AutoButtonColor = true
+toggleButton.ZIndex = 11
+toggleButton.Parent = dragFrame
+
+local btnCorner = Instance.new("UICorner")
+btnCorner.CornerRadius = UDim.new(0, 10)
+btnCorner.Parent = toggleButton
+
+-------------------------------------------------
+-- MOBILE JOYSTICK (for ghost movement)
+-------------------------------------------------
+local joystickFrame = Instance.new("Frame")
+joystickFrame.Name = "JoystickFrame"
+joystickFrame.Size = UDim2.new(0, 130, 0, 130)
+joystickFrame.Position = UDim2.new(0, 30, 1, -160)
+joystickFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+joystickFrame.BackgroundTransparency = 0.5
+joystickFrame.BorderSizePixel = 0
+joystickFrame.Visible = false
+joystickFrame.ZIndex = 10
+joystickFrame.Parent = screenGui
+
+local joystickCorner = Instance.new("UICorner")
+joystickCorner.CornerRadius = UDim.new(1, 0)
+joystickCorner.Parent = joystickFrame
+
+local joystickKnob = Instance.new("Frame")
+joystickKnob.Name = "Knob"
+joystickKnob.Size = UDim2.new(0, 50, 0, 50)
+joystickKnob.Position = UDim2.new(0.5, -25, 0.5, -25)
+joystickKnob.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
+joystickKnob.BackgroundTransparency = 0.3
+joystickKnob.BorderSizePixel = 0
+joystickKnob.ZIndex = 11
+joystickKnob.Parent = joystickFrame
+
+local knobCorner = Instance.new("UICorner")
+knobCorner.CornerRadius = UDim.new(1, 0)
+knobCorner.Parent = joystickKnob
+
+-- Jump button for ghost
+local jumpButton = Instance.new("TextButton")
+jumpButton.Name = "JumpButton"
+jumpButton.Size = UDim2.new(0, 70, 0, 70)
+jumpButton.Position = UDim2.new(1, -110, 1, -100)
+jumpButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+jumpButton.BackgroundTransparency = 0.5
+jumpButton.Text = "▲"
+jumpButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+jumpButton.Font = Enum.Font.GothamBold
+jumpButton.TextSize = 28
+jumpButton.Visible = false
+jumpButton.ZIndex = 10
+jumpButton.Parent = screenGui
+
+local jumpCorner = Instance.new("UICorner")
+jumpCorner.CornerRadius = UDim.new(1, 0)
+jumpCorner.Parent = jumpButton
+
+-------------------------------------------------
+-- DRAGGING SYSTEM
+-------------------------------------------------
+local dragging = false
+local dragStart = nil
+local startPos = nil
+local dragMoved = false
+
+dragFrame.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragMoved = false
+		dragStart = input.Position
+		startPos = dragFrame.Position
+
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+dragFrame.InputChanged:Connect(function(input)
+	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		local delta = input.Position - dragStart
+		if delta.Magnitude > 5 then
+			dragMoved = true
+		end
+		dragFrame.Position = UDim2.new(
+			startPos.X.Scale,
+			startPos.X.Offset + delta.X,
+			startPos.Y.Scale,
+			startPos.Y.Offset + delta.Y
+		)
+	end
+end)
+
+-------------------------------------------------
+-- JOYSTICK SYSTEM
+-------------------------------------------------
+local joystickInput = Vector2.new(0, 0)
+local joystickActive = false
+
+joystickFrame.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		joystickActive = true
+	end
+end)
+
+joystickFrame.InputChanged:Connect(function(input)
+	if joystickActive and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
+		local frameCenter = joystickFrame.AbsolutePosition + joystickFrame.AbsoluteSize / 2
+		local offset = Vector2.new(input.Position.X, input.Position.Y) - frameCenter
+		local maxDist = joystickFrame.AbsoluteSize.X / 2 - 25
+
+		if offset.Magnitude > maxDist then
+			offset = offset.Unit * maxDist
+		end
+
+		joystickKnob.Position = UDim2.new(0.5, offset.X - 25, 0.5, offset.Y - 25)
+		joystickInput = Vector2.new(offset.X / maxDist, offset.Y / maxDist)
+	end
+end)
+
+joystickFrame.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		joystickActive = false
+		joystickInput = Vector2.new(0, 0)
+		joystickKnob.Position = UDim2.new(0.5, -25, 0.5, -25)
+	end
+end)
+
+local ghostJumping = false
+jumpButton.MouseButton1Down:Connect(function()
+	ghostJumping = true
+end)
+jumpButton.MouseButton1Up:Connect(function()
+	ghostJumping = false
+end)
+
+-------------------------------------------------
+-- CREATE HIDDEN PLATFORM UNDERGROUND
+-------------------------------------------------
+local function createHiddenPlatform()
+	if hiddenPlatform and hiddenPlatform.Parent then return hiddenPlatform end
+
+	local platform = Instance.new("Part")
+	platform.Name = "GhostPlatform"
+	platform.Size = PLATFORM_SIZE
+	platform.Position = Vector3.new(0, UNDERGROUND_DEPTH, 0)
+	platform.Anchored = true
+	platform.CanCollide = true
+	platform.Transparency = 1
+	platform.Parent = Workspace
+
+	hiddenPlatform = platform
+	return platform
+end
+
+-------------------------------------------------
+-- CREATE GHOST CLONE (invisible anchored part for camera)
+-------------------------------------------------
+local ghostPosition = Vector3.new(0, 5, 0)
+local ghostVelocity = Vector3.new(0, 0, 0)
+local ghostGrounded = true
+local GHOST_SPEED = 24
+local GHOST_JUMP = 55
+local GRAVITY = -120
+
+local function createGhostAnchor()
+	local anchor = Instance.new("Part")
+	anchor.Name = "GhostAnchor"
+	anchor.Size = Vector3.new(2, 0.1, 2)
+	anchor.Transparency = 1
+	anchor.CanCollide = false
+	anchor.Anchored = true
+	anchor.Position = ghostPosition
+	anchor.Parent = Workspace
+	return anchor
+end
+
+-------------------------------------------------
+-- RAYCAST FOR GHOST GROUND CHECK
+-------------------------------------------------
+local function ghostGroundCheck(pos)
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+
+	local character = player.Character
+	local excludeList = {}
+	if character then table.insert(excludeList, character) end
+	if hiddenPlatform then table.insert(excludeList, hiddenPlatform) end
+	if ghostClone then table.insert(excludeList, ghostClone) end
+	params.FilterDescendantsInstances = excludeList
+
+	local result = Workspace:Raycast(pos + Vector3.new(0, 1, 0), Vector3.new(0, -3, 0), params)
+	if result then
+		return true, result.Position.Y + 2.5
+	end
+	return false, nil
+end
+
+-------------------------------------------------
+-- GHOST MODE: ACTIVATE
+-------------------------------------------------
+local function activateGhostMode()
+	local character = player.Character
+	if not character then return end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not humanoid or not rootPart then return end
+
+	-- Save position
+	originalPosition = rootPart.CFrame
+
+	-- Set ghost starting position to where player was
+	ghostPosition = rootPart.Position
+	ghostVelocity = Vector3.new(0, 0, 0)
+
+	-- Create underground platform
+	createHiddenPlatform()
+
+	-- Move real character underground
+	rootPart.CFrame = CFrame.new(0, UNDERGROUND_DEPTH + 5, 0)
+
+	-- Disable real character movement
+	humanoid.WalkSpeed = 0
+	humanoid.JumpPower = 0
+	humanoid.JumpHeight = 0
+
+	-- Create ghost anchor for camera
+	ghostClone = createGhostAnchor()
+	ghostClone.Position = ghostPosition
+
+	-- Set camera to ghost
+	camera.CameraType = Enum.CameraType.Scriptable
+
+	-- Show mobile controls
+	joystickFrame.Visible = true
+	jumpButton.Visible = true
+
+	-- Start ghost movement loop
+	renderConnection = RunService.RenderStepped:Connect(function(dt)
+		if not ghostModeActive then return end
+
+		-- Get camera look direction (flatten Y)
+		local camCF = camera.CFrame
+		local lookVector = camCF.LookVector
+		local rightVector = camCF.RightVector
+		local flatLook = Vector3.new(lookVector.X, 0, lookVector.Z).Unit
+		local flatRight = Vector3.new(rightVector.X, 0, rightVector.Z).Unit
+
+		-- Keyboard input
+		local moveDir = Vector3.new(0, 0, 0)
+		if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+			moveDir = moveDir + flatLook
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+			moveDir = moveDir - flatLook
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+			moveDir = moveDir + flatRight
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+			moveDir = moveDir - flatRight
+		end
+
+		-- Mobile joystick input
+		if joystickInput.Magnitude > 0.1 then
+			moveDir = moveDir + flatLook * -joystickInput.Y + flatRight * joystickInput.X
+		end
+
+		if moveDir.Magnitude > 0 then
+			moveDir = moveDir.Unit
+		end
+
+		-- Apply horizontal movement
+		local horizontalMove = moveDir * GHOST_SPEED * dt
+		ghostPosition = ghostPosition + horizontalMove
+
+		-- Gravity and jumping
+		local grounded, groundY = ghostGroundCheck(ghostPosition)
+
+		if grounded and groundY then
+			if ghostPosition.Y <= groundY then
+				ghostPosition = Vector3.new(ghostPosition.X, groundY, ghostPosition.Z)
+				ghostVelocity = Vector3.new(0, 0, 0)
+				ghostGrounded = true
+			else
+				ghostGrounded = false
+			end
+		else
+			ghostGrounded = false
+		end
+
+		-- Jump
+		local wantJump = UserInputService:IsKeyDown(Enum.KeyCode.Space) or ghostJumping
+		if wantJump and ghostGrounded then
+			ghostVelocity = Vector3.new(0, GHOST_JUMP, 0)
+			ghostGrounded = false
+		end
+
+		-- Apply gravity
+		if not ghostGrounded then
+			ghostVelocity = ghostVelocity + Vector3.new(0, GRAVITY * dt, 0)
+			ghostPosition = ghostPosition + ghostVelocity * dt
+		end
+
+		-- Prevent falling to void
+		if ghostPosition.Y < -200 then
+			ghostPosition = Vector3.new(ghostPosition.X, 50, ghostPosition.Z)
+			ghostVelocity = Vector3.new(0, 0, 0)
+		end
+
+		-- Update ghost anchor
+		if ghostClone and ghostClone.Parent then
+			ghostClone.Position = ghostPosition
+		end
+
+		-- Camera follows ghost (third person offset)
+		local camDistance = 15
+		local camHeight = 5
+		local camTarget = ghostPosition + Vector3.new(0, 2, 0)
+
+		-- Smooth camera rotation - maintain current rotation
+		local currentLook = camCF.LookVector
+		local camPos = camTarget - Vector3.new(currentLook.X, 0, currentLook.Z).Unit * camDistance + Vector3.new(0, camHeight, 0)
+
+		camera.CFrame = CFrame.new(camPos, camTarget)
+
+		-- Keep real character underground
+		local char = player.Character
+		if char then
+			local rp = char:FindFirstChild("HumanoidRootPart")
+			if rp and rp.Position.Y > UNDERGROUND_DEPTH - 20 then
+				rp.CFrame = CFrame.new(0, UNDERGROUND_DEPTH + 5, 0)
+			end
+		end
+	end)
+
+	ghostModeActive = true
+end
+
+-------------------------------------------------
+-- GHOST MODE: DEACTIVATE
+-------------------------------------------------
+local function deactivateGhostMode()
+	ghostModeActive = false
+
+	-- Stop render loop
+	if renderConnection then
+		renderConnection:Disconnect()
+		renderConnection = nil
+	end
+
+	-- Hide mobile controls
+	joystickFrame.Visible = false
+	jumpButton.Visible = false
+
+	-- Restore camera
+	camera.CameraType = Enum.CameraType.Custom
+
+	-- Move character back to ghost position
+	local character = player.Character
+	if character then
+		local rootPart = character:FindFirstChild("HumanoidRootPart")
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+
+		if rootPart then
+			rootPart.CFrame = CFrame.new(ghostPosition)
+		end
+
+		if humanoid then
+			humanoid.WalkSpeed = 16
+			humanoid.JumpPower = 50
+			humanoid.JumpHeight = 7.2
+		end
+	end
+
+	-- Clean up ghost anchor
+	if ghostClone and ghostClone.Parent then
+		ghostClone:Destroy()
+		ghostClone = nil
+	end
+
+	-- Clean up platform
+	if hiddenPlatform and hiddenPlatform.Parent then
+		hiddenPlatform:Destroy()
+		hiddenPlatform = nil
+	end
+end
+
+-------------------------------------------------
+-- CAMERA ROTATION (Touch + Mouse)
+-------------------------------------------------
+local cameraAngleX = 0
+local cameraAngleY = 10
+local cameraSensitivity = 0.3
+local cameraRotating = false
+local lastTouchPos = nil
+
+-- Override camera in ghost mode with rotation support
+local function setupCameraControl()
+	local camRenderConn
+
+	-- Mouse/Touch rotation
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if not ghostModeActive then return end
+		if processed then return end
+
+		if input.UserInputType == Enum.UserInputType.MouseButton2 then
+			cameraRotating = true
+			UserInputService.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
+		end
+
+		if input.UserInputType == Enum.UserInputType.Touch then
+			-- Only rotate if touch is on right side of screen
+			local viewSize = camera.ViewportSize
+			if input.Position.X > viewSize.X * 0.4 then
+				cameraRotating = true
+				lastTouchPos = input.Position
+			end
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton2 then
+			cameraRotating = false
+			UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+		end
+		if input.UserInputType == Enum.UserInputType.Touch then
+			cameraRotating = false
+			lastTouchPos = nil
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if not ghostModeActive then return end
+		if not cameraRotating then return end
+
+		if input.UserInputType == Enum.UserInputType.MouseMovement then
+			cameraAngleX = cameraAngleX - input.Delta.X * cameraSensitivity
+			cameraAngleY = math.clamp(cameraAngleY + input.Delta.Y * cameraSensitivity, -80, 80)
+		end
+
+		if input.UserInputType == Enum.UserInputType.Touch and lastTouchPos then
+			local delta = input.Position - lastTouchPos
+			cameraAngleX = cameraAngleX - delta.X * cameraSensitivity
+			cameraAngleY = math.clamp(cameraAngleY + delta.Y * cameraSensitivity, -80, 80)
+			lastTouchPos = input.Position
+		end
+	end)
+
+	-- Override the camera update in the render loop
+	if renderConnection then
+		renderConnection:Disconnect()
+	end
+
+	renderConnection = RunService.RenderStepped:Connect(function(dt)
+		if not ghostModeActive then return end
+
+		-- Camera direction from angles
+		local radX = math.rad(cameraAngleX)
+		local radY = math.rad(cameraAngleY)
+
+		local lookDir = Vector3.new(
+			math.sin(radX) * math.cos(radY),
+			-math.sin(radY),
+			math.cos(radX) * math.cos(radY)
+		).Unit
+
+		local flatLook = Vector3.new(math.sin(radX), 0, math.cos(radX)).Unit
+		local flatRight = Vector3.new(math.cos(radX), 0, -math.sin(radX)).Unit
+
+		-- Input
+		local moveDir = Vector3.new(0, 0, 0)
+		if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+			moveDir = moveDir + flatLook
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+			moveDir = moveDir - flatLook
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+			moveDir = moveDir + flatRight
+		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+			moveDir = moveDir - flatRight
+		end
+
+		-- Mobile joystick
+		if joystickInput.Magnitude > 0.1 then
+			moveDir = moveDir + flatLook * -joystickInput.Y + flatRight * joystickInput.X
+		end
+
+		if moveDir.Magnitude > 0 then
+			moveDir = moveDir.Unit
+		end
+
+		ghostPosition = ghostPosition + moveDir * GHOST_SPEED * dt
+
+		-- Ground check
+		local grounded, groundY = ghostGroundCheck(ghostPosition)
+
+		if grounded and groundY then
+			if ghostPosition.Y <= groundY then
+				ghostPosition = Vector3.new(ghostPosition.X, groundY, ghostPosition.Z)
+				ghostVelocity = Vector3.new(0, 0, 0)
+				ghostGrounded = true
+			else
+				ghostGrounded = false
+			end
+		else
+			ghostGrounded = false
+		end
+
+		-- Jump
+		local wantJump = UserInputService:IsKeyDown(Enum.KeyCode.Space) or ghostJumping
+		if wantJump and ghostGrounded then
+			ghostVelocity = Vector3.new(0, GHOST_JUMP, 0)
+			ghostGrounded = false
+		end
+
+		if not ghostGrounded then
+			ghostVelocity = ghostVelocity + Vector3.new(0, GRAVITY * dt, 0)
+			ghostPosition = ghostPosition + ghostVelocity * dt
+		end
+
+		if ghostPosition.Y < -200 then
+			ghostPosition = Vector3.new(ghostPosition.X, 50, ghostPosition.Z)
+			ghostVelocity = Vector3.new(0, 0, 0)
+		end
+
+		if ghostClone and ghostClone.Parent then
+			ghostClone.Position = ghostPosition
+		end
+
+		-- Camera
+		local camDistance = 15
+		local camTarget = ghostPosition + Vector3.new(0, 3, 0)
+		local camPos = camTarget - lookDir * camDistance
+
+		-- Raycast to prevent camera going through walls
+		local camParams = RaycastParams.new()
+		camParams.FilterType = Enum.RaycastFilterType.Exclude
+		local excludes = {}
+		if player.Character then table.insert(excludes, player.Character) end
+		if ghostClone then table.insert(excludes, ghostClone) end
+		if hiddenPlatform then table.insert(excludes, hiddenPlatform) end
+		camParams.FilterDescendantsInstances = excludes
+
+		local camRay = Workspace:Raycast(camTarget, (camPos - camTarget), camParams)
+		if camRay then
+			camPos = camRay.Position + (camTarget - camPos).Unit * 0.5
+		end
+
+		camera.CFrame = CFrame.new(camPos, camTarget)
+
+		-- Keep character underground
+		local char = player.Character
+		if char then
+			local rp = char:FindFirstChild("HumanoidRootPart")
+			if rp and rp.Position.Y > UNDERGROUND_DEPTH - 50 then
+				rp.CFrame = CFrame.new(0, UNDERGROUND_DEPTH + 5, 0)
+			end
+		end
+	end)
+end
+
+-------------------------------------------------
+-- TOGGLE
+-------------------------------------------------
+local debounce = false
+
+toggleButton.MouseButton1Click:Connect(function()
+	if debounce then return end
+	if dragMoved then
+		dragMoved = false
+		return
+	end
+
+	debounce = true
+
+	if not ghostModeActive then
+		toggleButton.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+		toggleButton.Text = "GHOST: ON"
+		statusDot.BackgroundColor3 = Color3.fromRGB(50, 255, 50)
+		frameStroke.Color = Color3.fromRGB(50, 200, 50)
+
+		-- Get initial camera angle
+		local camLook = camera.CFrame.LookVector
+		cameraAngleX = math.deg(math.atan2(camLook.X, camLook.Z))
