@@ -10,6 +10,7 @@ local selName, selId, selSkin = "", "", ""
 local dragging = false
 local dragInput, dragStart, startPos
 local savedCFrame = nil
+local waitingForTP = false
 
 local SG = Instance.new("ScreenGui")
 SG.Name = "MorphGui"
@@ -17,7 +18,6 @@ SG.ResetOnSpawn = false
 SG.Parent = PGui
 
 local MF = Instance.new("Frame")
-MF.Name = "Main"
 MF.Size = UDim2.new(0, 240, 0, 340)
 MF.Position = UDim2.new(0.5, -120, 0.5, -170)
 MF.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
@@ -51,7 +51,6 @@ TL.Font = Enum.Font.GothamBold
 TL.TextXAlignment = Enum.TextXAlignment.Left
 TL.Parent = TB
 
--- Drag (multi-touch safe)
 TB.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
 		dragging = true
@@ -71,19 +70,18 @@ end)
 
 TB.InputChanged:Connect(function(input)
 	if dragging and input == dragInput then
-		local delta = input.Position - dragStart
-		MF.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+		local d = input.Position - dragStart
+		MF.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
 	end
 end)
 
 UIS.InputChanged:Connect(function(input)
 	if dragging and input == dragInput then
-		local delta = input.Position - dragStart
-		MF.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+		local d = input.Position - dragStart
+		MF.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
 	end
 end)
 
--- Minimize
 local minBtn = Instance.new("TextButton")
 minBtn.Size = UDim2.new(0, 24, 0, 24)
 minBtn.Position = UDim2.new(1, -30, 0, 5)
@@ -115,7 +113,6 @@ minBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
--- Toggle
 local togFrame = Instance.new("Frame")
 togFrame.Size = UDim2.new(1, 0, 0, 36)
 togFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
@@ -184,7 +181,6 @@ togBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
--- Thumbnail
 local thumbFrame = Instance.new("Frame")
 thumbFrame.Size = UDim2.new(0, 56, 0, 56)
 thumbFrame.Position = UDim2.new(0.5, -28, 0, 62)
@@ -202,7 +198,6 @@ thumbImg.ScaleType = Enum.ScaleType.Fit
 thumbImg.Parent = thumbFrame
 Instance.new("UICorner", thumbImg).CornerRadius = UDim.new(1, 0)
 
--- Info labels
 local nameLbl = Instance.new("TextLabel")
 nameLbl.Size = UDim2.new(1, 0, 0, 16)
 nameLbl.Position = UDim2.new(0, 0, 0, 122)
@@ -237,7 +232,6 @@ skinLbl.TextXAlignment = Enum.TextXAlignment.Left
 skinLbl.TextTruncate = Enum.TextTruncate.AtEnd
 skinLbl.Parent = content
 
--- ID Input
 local idInput = Instance.new("TextBox")
 idInput.Size = UDim2.new(1, 0, 0, 28)
 idInput.Position = UDim2.new(0, 0, 0, 180)
@@ -253,7 +247,6 @@ idInput.ClearTextOnFocus = false
 idInput.Parent = content
 Instance.new("UICorner", idInput).CornerRadius = UDim.new(0, 6)
 
--- Skin Input
 local skinInput = Instance.new("TextBox")
 skinInput.Size = UDim2.new(1, 0, 0, 28)
 skinInput.Position = UDim2.new(0, 0, 0, 212)
@@ -269,7 +262,6 @@ skinInput.ClearTextOnFocus = false
 skinInput.Parent = content
 Instance.new("UICorner", skinInput).CornerRadius = UDim.new(0, 6)
 
--- Morph Button
 local morphBtn = Instance.new("TextButton")
 morphBtn.Size = UDim2.new(1, 0, 0, 36)
 morphBtn.Position = UDim2.new(0, 0, 0, 248)
@@ -282,7 +274,6 @@ morphBtn.Font = Enum.Font.GothamBold
 morphBtn.Parent = content
 Instance.new("UICorner", morphBtn).CornerRadius = UDim.new(0, 7)
 
--- Result
 local resLbl = Instance.new("TextLabel")
 resLbl.Size = UDim2.new(1, 0, 0, 14)
 resLbl.Position = UDim2.new(0, 0, 0, 288)
@@ -294,7 +285,6 @@ resLbl.Font = Enum.Font.Gotham
 resLbl.TextWrapped = true
 resLbl.Parent = content
 
--- Thumbnail helper
 local function setThumb(userId)
 	local ok, url = pcall(function()
 		return Players:GetUserThumbnailAsync(tonumber(userId), Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
@@ -302,122 +292,48 @@ local function setThumb(userId)
 	thumbImg.Image = (ok and url) or ""
 end
 
--- Find the ORIGINAL player behind a morphed character
-local function findOriginalOwner(character)
-	if not character then return nil end
+-- The KEY fix: the character model name IS the skin name
+-- That skin name is actually another player's username
+-- So we look up that username to get their ID (works for ANY roblox player)
+local function selectFromCharacter(character)
+	if not character then return end
+	local skinName = character.Name -- THIS is the skin = another player's name
 
-	-- Check all players to see whose character this model is
-	for _, p in pairs(Players:GetPlayers()) do
-		if p.Character == character then
-			return p
-		end
-	end
-	return nil
-end
+	-- Look up the ID of that skin name (works offline/online/any player)
+	local foundId = ""
+	local foundName = skinName
 
--- Get skin: the character model name IS the skin when morphed
--- Because morph systems change the character model name to the skin name
-local function getSkinFromCharacter(character, ownerPlayer)
-	if not character then return "" end
+	local ok, userId = pcall(function()
+		return Players:GetUserIdFromNameAsync(skinName)
+	end)
 
-	-- Method 1: If character name differs from player name, that IS the skin
-	if ownerPlayer and character.Name ~= ownerPlayer.Name then
-		return character.Name
-	end
-
-	-- Method 2: Check StringValue/IntValue in character or player
-	local searchLocations = {character}
-	if ownerPlayer then table.insert(searchLocations, ownerPlayer) end
-
-	for _, loc in pairs(searchLocations) do
-		for _, v in pairs(loc:GetDescendants()) do
-			local n = v.Name:lower()
-			if (n:find("skin") or n:find("morph") or n:find("outfit") or n:find("currentchar")) then
-				if v:IsA("StringValue") or v:IsA("IntValue") then
-					if tostring(v.Value) ~= "" then
-						return tostring(v.Value)
+	if ok and userId then
+		foundId = tostring(userId)
+		foundName = skinName
+	else
+		-- Maybe character name has display name, try descendants
+		for _, v in pairs(character:GetDescendants()) do
+			if (v:IsA("StringValue") or v:IsA("IntValue")) then
+				local n = v.Name:lower()
+				if n:find("skin") or n:find("morph") or n:find("owner") or n:find("original") then
+					local tryName = tostring(v.Value)
+					local ok2, uid2 = pcall(function()
+						return Players:GetUserIdFromNameAsync(tryName)
+					end)
+					if ok2 and uid2 then
+						foundId = tostring(uid2)
+						foundName = tryName
+						skinName = tryName
+						break
 					end
 				end
 			end
 		end
 	end
 
-	-- Method 3: Leaderstats
-	if ownerPlayer then
-		local ls = ownerPlayer:FindFirstChild("leaderstats")
-		if ls then
-			for _, v in pairs(ls:GetChildren()) do
-				local n = v.Name:lower()
-				if n:find("skin") or n:find("char") then
-					return tostring(v.Value)
-				end
-			end
-		end
-	end
-
-	-- Method 4: Humanoid description
-	local hum = character:FindFirstChildOfClass("Humanoid")
-	if hum then
-		local ok, desc = pcall(function() return hum:GetAppliedDescription() end)
-		if ok and desc then
-			local shirt = desc.Shirt
-			if shirt and shirt ~= 0 then return tostring(shirt) end
-		end
-	end
-
-	return character.Name
-end
-
--- Get the ID to use: find who this skin belongs to
--- The character model name is the skin, we need to find the player ID
--- who OWNS that skin appearance (not the player wearing it)
-local function getIdFromCharacter(character, ownerPlayer)
-	-- The character model name is often the skin/morph name
-	-- which could be another player's name
-	local charName = character.Name
-
-	-- Check if charName matches any online player
-	local matchedPlayer = Players:FindFirstChild(charName)
-	if matchedPlayer and matchedPlayer:IsA("Player") then
-		return tostring(matchedPlayer.UserId)
-	end
-
-	-- Check if charName is a username of anyone (online or offline)
-	local ok, userId = pcall(function()
-		return Players:GetUserIdFromNameAsync(charName)
-	end)
-	if ok and userId then
-		return tostring(userId)
-	end
-
-	-- Fallback: use the owner player's ID
-	if ownerPlayer then
-		return tostring(ownerPlayer.UserId)
-	end
-
-	return ""
-end
-
--- Main selection from clicking a character model
-local function selectFromCharacter(character)
-	if not character then return end
-
-	local ownerPlayer = findOriginalOwner(character)
-	local skin = getSkinFromCharacter(character, ownerPlayer)
-	local id = getIdFromCharacter(character, ownerPlayer)
-	local name = character.Name
-
-	-- Try to resolve name from ID if we got an ID
-	if id ~= "" then
-		local ok, n = pcall(function()
-			return Players:GetNameFromUserIdAsync(tonumber(id))
-		end)
-		if ok and n then name = n end
-	end
-
-	selName = name
-	selId = id
-	selSkin = skin
+	selName = foundName
+	selId = foundId
+	selSkin = skinName
 	nameLbl.Text = "Name: " .. selName
 	idLbl.Text = "ID: " .. selId
 	skinLbl.Text = "Skin: " .. selSkin
@@ -425,26 +341,20 @@ local function selectFromCharacter(character)
 	skinInput.Text = selSkin
 	resLbl.Text = "Selected!"
 	resLbl.TextColor3 = Color3.fromRGB(100, 255, 100)
-
-	if id ~= "" then setThumb(id) end
+	if foundId ~= "" then setThumb(foundId) end
 end
 
--- Desktop click
 local mouse = LP:GetMouse()
 mouse.Button1Down:Connect(function()
 	if not toggleOn then return end
 	local t = mouse.Target
 	if not t then return end
 	local char = t:FindFirstAncestorOfClass("Model")
-	if not char then return end
-	-- Make sure it has a humanoid (is a character)
-	if not char:FindFirstChildOfClass("Humanoid") then return end
-	-- Don't select yourself
+	if not char or not char:FindFirstChildOfClass("Humanoid") then return end
 	if LP.Character and char == LP.Character then return end
 	selectFromCharacter(char)
 end)
 
--- Mobile touch
 UIS.TouchTapInWorld:Connect(function(pos, processed)
 	if not toggleOn or processed then return end
 	local cam = workspace.CurrentCamera
@@ -462,28 +372,24 @@ UIS.TouchTapInWorld:Connect(function(pos, processed)
 	end
 end)
 
--- Teleport loop: constantly save position and restore after respawn
-task.spawn(function()
-	while true do
-		if LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then
-			savedCFrame = LP.Character.HumanoidRootPart.CFrame
-		end
-		task.wait(0.1)
-	end
-end)
-
--- Listen for character respawn to teleport back
+-- TELEPORT FIX: CharacterAdded fires when morph resets you
+-- We wait for HumanoidRootPart then keep teleporting until it sticks
 LP.CharacterAdded:Connect(function(char)
-	if savedCFrame then
-		local hrp = char:WaitForChild("HumanoidRootPart", 5)
-		if hrp then
-			task.wait(0.1)
+	if not waitingForTP or not savedCFrame then return end
+	local hrp = char:WaitForChild("HumanoidRootPart", 10)
+	if not hrp then return end
+	-- Spam teleport to make sure it sticks after respawn
+	for i = 1, 20 do
+		task.wait(0.15)
+		if hrp and hrp.Parent then
 			hrp.CFrame = savedCFrame
 		end
 	end
+	waitingForTP = false
+	resLbl.Text = "Morphed + Teleported!"
+	resLbl.TextColor3 = Color3.fromRGB(100, 255, 100)
 end)
 
--- Morph button
 morphBtn.MouseButton1Click:Connect(function()
 	local fId = idInput.Text:gsub("%s", "")
 	local fSkin = skinInput.Text
@@ -499,45 +405,42 @@ morphBtn.MouseButton1Click:Connect(function()
 		return
 	end
 
-	-- Save position right before morph
+	-- Save position NOW before morph
 	if LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then
 		savedCFrame = LP.Character.HumanoidRootPart.CFrame
 	end
+	waitingForTP = true
 
-	-- Try to load thumbnail for confirmation
 	if tonumber(fId) then
 		setThumb(fId)
 		local ok, n = pcall(function()
 			return Players:GetNameFromUserIdAsync(tonumber(fId))
 		end)
-		if ok and n then
-			nameLbl.Text = "Name: " .. n
-		end
+		if ok and n then nameLbl.Text = "Name: " .. n end
 	end
 	idLbl.Text = "ID: " .. fId
 	skinLbl.Text = "Skin: " .. fSkin
 
-	local args = {[1] = fId, [2] = fSkin}
 	local ok, err = pcall(function()
-		RS.SendCharMorphEvent:FireServer(unpack(args))
+		RS.SendCharMorphEvent:FireServer(fId, fSkin)
 	end)
 
 	if ok then
 		morphBtn.BackgroundColor3 = Color3.fromRGB(30, 180, 80)
 		morphBtn.Text = "SENT!"
-		resLbl.Text = "Morphing..."
+		resLbl.Text = "Morphing + will teleport..."
 		resLbl.TextColor3 = Color3.fromRGB(100, 200, 255)
 		task.delay(1.5, function()
 			morphBtn.BackgroundColor3 = Color3.fromRGB(40, 110, 190)
 			morphBtn.Text = "MORPH"
 		end)
 	else
+		waitingForTP = false
 		resLbl.Text = "Error: " .. tostring(err)
 		resLbl.TextColor3 = Color3.fromRGB(255, 80, 80)
 	end
 end)
 
--- Input boxes auto-update display when typed manually
 idInput.FocusLost:Connect(function()
 	local id = idInput.Text:gsub("%s", "")
 	if tonumber(id) then
@@ -554,7 +457,6 @@ idInput.FocusLost:Connect(function()
 	end
 end)
 
--- Open animation
 MF.Size = UDim2.new(0, 0, 0, 0)
 MF.Position = UDim2.new(0.5, 0, 0.5, 0)
 MF:TweenSizeAndPosition(UDim2.new(0, 240, 0, 340), UDim2.new(0.5, -120, 0.5, -170), Enum.EasingDirection.Out, Enum.EasingStyle.Back, 0.4, true)
