@@ -1,0 +1,651 @@
+-- LocalScript: Place in StarterPlayerScripts or StarterGui
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Variables
+local toggleActive = false
+local selectedPlayerName = ""
+local selectedPlayerId = ""
+local selectedSkin = ""
+local dragging = false
+local dragStart = nil
+local startPos = nil
+
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "MorphGui"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = PlayerGui
+
+-- Main Frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 320, 0, 420)
+mainFrame.Position = UDim2.new(0.5, -160, 0.5, -210)
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Parent = screenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 12)
+mainCorner.Parent = mainFrame
+
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = Color3.fromRGB(80, 80, 120)
+mainStroke.Thickness = 2
+mainStroke.Parent = mainFrame
+
+-- Shadow
+local shadow = Instance.new("ImageLabel")
+shadow.Name = "Shadow"
+shadow.Size = UDim2.new(1, 30, 1, 30)
+shadow.Position = UDim2.new(0, -15, 0, -15)
+shadow.BackgroundTransparency = 1
+shadow.Image = "rbxassetid://5554236805"
+shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+shadow.ImageTransparency = 0.5
+shadow.ScaleType = Enum.ScaleType.Slice
+shadow.SliceCenter = Rect.new(23, 23, 277, 277)
+shadow.ZIndex = -1
+shadow.Parent = mainFrame
+
+-- Title Bar
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1, 0, 0, 45)
+titleBar.Position = UDim2.new(0, 0, 0, 0)
+titleBar.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 12)
+titleCorner.Parent = titleBar
+
+-- Fix bottom corners of title bar
+local titleFix = Instance.new("Frame")
+titleFix.Size = UDim2.new(1, 0, 0, 12)
+titleFix.Position = UDim2.new(0, 0, 1, -12)
+titleFix.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+titleFix.BorderSizePixel = 0
+titleFix.Parent = titleBar
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Name = "Title"
+titleLabel.Size = UDim2.new(1, -20, 1, 0)
+titleLabel.Position = UDim2.new(0, 10, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "🎭 Skin Morph Tool"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextSize = 18
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = titleBar
+
+-- Minimize Button
+local minimizeBtn = Instance.new("TextButton")
+minimizeBtn.Name = "MinimizeBtn"
+minimizeBtn.Size = UDim2.new(0, 30, 0, 30)
+minimizeBtn.Position = UDim2.new(1, -38, 0, 7)
+minimizeBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+minimizeBtn.BorderSizePixel = 0
+minimizeBtn.Text = "—"
+minimizeBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+minimizeBtn.TextSize = 14
+minimizeBtn.Font = Enum.Font.GothamBold
+minimizeBtn.Parent = titleBar
+
+local minCorner = Instance.new("UICorner")
+minCorner.CornerRadius = UDim.new(0, 6)
+minCorner.Parent = minimizeBtn
+
+-- Content Frame
+local contentFrame = Instance.new("Frame")
+contentFrame.Name = "Content"
+contentFrame.Size = UDim2.new(1, -20, 1, -55)
+contentFrame.Position = UDim2.new(0, 10, 0, 50)
+contentFrame.BackgroundTransparency = 1
+contentFrame.Parent = mainFrame
+
+-- Toggle Section
+local toggleSection = Instance.new("Frame")
+toggleSection.Name = "ToggleSection"
+toggleSection.Size = UDim2.new(1, 0, 0, 50)
+toggleSection.Position = UDim2.new(0, 0, 0, 0)
+toggleSection.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+toggleSection.BorderSizePixel = 0
+toggleSection.Parent = contentFrame
+
+local toggleSectionCorner = Instance.new("UICorner")
+toggleSectionCorner.CornerRadius = UDim.new(0, 8)
+toggleSectionCorner.Parent = toggleSection
+
+local toggleLabel = Instance.new("TextLabel")
+toggleLabel.Size = UDim2.new(1, -70, 1, 0)
+toggleLabel.Position = UDim2.new(0, 12, 0, 0)
+toggleLabel.BackgroundTransparency = 1
+toggleLabel.Text = "👆 Click Player Mode"
+toggleLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+toggleLabel.TextSize = 14
+toggleLabel.Font = Enum.Font.GothamSemibold
+toggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+toggleLabel.Parent = toggleSection
+
+-- Toggle Button
+local toggleBg = Instance.new("Frame")
+toggleBg.Name = "ToggleBg"
+toggleBg.Size = UDim2.new(0, 50, 0, 26)
+toggleBg.Position = UDim2.new(1, -60, 0.5, -13)
+toggleBg.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+toggleBg.BorderSizePixel = 0
+toggleBg.Parent = toggleSection
+
+local toggleBgCorner = Instance.new("UICorner")
+toggleBgCorner.CornerRadius = UDim.new(1, 0)
+toggleBgCorner.Parent = toggleBg
+
+local toggleCircle = Instance.new("Frame")
+toggleCircle.Name = "Circle"
+toggleCircle.Size = UDim2.new(0, 20, 0, 20)
+toggleCircle.Position = UDim2.new(0, 3, 0.5, -10)
+toggleCircle.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
+toggleCircle.BorderSizePixel = 0
+toggleCircle.Parent = toggleBg
+
+local circleCorner = Instance.new("UICorner")
+circleCorner.CornerRadius = UDim.new(1, 0)
+circleCorner.Parent = toggleCircle
+
+local toggleButton = Instance.new("TextButton")
+toggleButton.Name = "ToggleBtn"
+toggleButton.Size = UDim2.new(1, 0, 1, 0)
+toggleButton.BackgroundTransparency = 1
+toggleButton.Text = ""
+toggleButton.Parent = toggleBg
+
+-- Status Label
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Name = "Status"
+statusLabel.Size = UDim2.new(1, 0, 0, 25)
+statusLabel.Position = UDim2.new(0, 0, 0, 58)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "Status: Inactive"
+statusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+statusLabel.TextSize = 12
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.Parent = contentFrame
+
+-- Info Section
+local infoSection = Instance.new("Frame")
+infoSection.Name = "InfoSection"
+infoSection.Size = UDim2.new(1, 0, 0, 130)
+infoSection.Position = UDim2.new(0, 0, 0, 90)
+infoSection.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+infoSection.BorderSizePixel = 0
+infoSection.Parent = contentFrame
+
+local infoCorner = Instance.new("UICorner")
+infoCorner.CornerRadius = UDim.new(0, 8)
+infoCorner.Parent = infoSection
+
+local infoTitle = Instance.new("TextLabel")
+infoTitle.Size = UDim2.new(1, -16, 0, 30)
+infoTitle.Position = UDim2.new(0, 8, 0, 0)
+infoTitle.BackgroundTransparency = 1
+infoTitle.Text = "📋 Selected Player Info"
+infoTitle.TextColor3 = Color3.fromRGB(180, 180, 220)
+infoTitle.TextSize = 13
+infoTitle.Font = Enum.Font.GothamBold
+infoTitle.TextXAlignment = Enum.TextXAlignment.Left
+infoTitle.Parent = infoSection
+
+local divider = Instance.new("Frame")
+divider.Size = UDim2.new(1, -16, 0, 1)
+divider.Position = UDim2.new(0, 8, 0, 30)
+divider.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+divider.BorderSizePixel = 0
+divider.Parent = infoSection
+
+local nameLabel = Instance.new("TextLabel")
+nameLabel.Name = "NameLabel"
+nameLabel.Size = UDim2.new(1, -16, 0, 25)
+nameLabel.Position = UDim2.new(0, 8, 0, 36)
+nameLabel.BackgroundTransparency = 1
+nameLabel.Text = "Name: N/A"
+nameLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+nameLabel.TextSize = 13
+nameLabel.Font = Enum.Font.Gotham
+nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+nameLabel.Parent = infoSection
+
+local idLabel = Instance.new("TextLabel")
+idLabel.Name = "IdLabel"
+idLabel.Size = UDim2.new(1, -16, 0, 25)
+idLabel.Position = UDim2.new(0, 8, 0, 61)
+idLabel.BackgroundTransparency = 1
+idLabel.Text = "ID: N/A"
+idLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+idLabel.TextSize = 13
+idLabel.Font = Enum.Font.Gotham
+idLabel.TextXAlignment = Enum.TextXAlignment.Left
+idLabel.Parent = infoSection
+
+local skinLabel = Instance.new("TextLabel")
+skinLabel.Name = "SkinLabel"
+skinLabel.Size = UDim2.new(1, -16, 0, 25)
+skinLabel.Position = UDim2.new(0, 8, 0, 86)
+skinLabel.BackgroundTransparency = 1
+skinLabel.Text = "Skin: N/A"
+skinLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+skinLabel.TextSize = 13
+skinLabel.Font = Enum.Font.Gotham
+skinLabel.TextXAlignment = Enum.TextXAlignment.Left
+skinLabel.TextTruncate = Enum.TextTruncate.AtEnd
+skinLabel.Parent = infoSection
+
+-- Morph Button
+local morphButton = Instance.new("TextButton")
+morphButton.Name = "MorphButton"
+morphButton.Size = UDim2.new(1, 0, 0, 45)
+morphButton.Position = UDim2.new(0, 0, 0, 230)
+morphButton.BackgroundColor3 = Color3.fromRGB(50, 120, 200)
+morphButton.BorderSizePixel = 0
+morphButton.Text = "🔄 MORPH INTO PLAYER"
+morphButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+morphButton.TextSize = 15
+morphButton.Font = Enum.Font.GothamBold
+morphButton.AutoButtonColor = true
+morphButton.Parent = contentFrame
+
+local morphCorner = Instance.new("UICorner")
+morphCorner.CornerRadius = UDim.new(0, 8)
+morphCorner.Parent = morphButton
+
+-- Clear Button
+local clearButton = Instance.new("TextButton")
+clearButton.Name = "ClearButton"
+clearButton.Size = UDim2.new(1, 0, 0, 35)
+clearButton.Position = UDim2.new(0, 0, 0, 283)
+clearButton.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+clearButton.BorderSizePixel = 0
+clearButton.Text = "🗑️ Clear Selection"
+clearButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+clearButton.TextSize = 13
+clearButton.Font = Enum.Font.GothamSemibold
+clearButton.AutoButtonColor = true
+clearButton.Parent = contentFrame
+
+local clearCorner = Instance.new("UICorner")
+clearCorner.CornerRadius = UDim.new(0, 8)
+clearCorner.Parent = clearButton
+
+-- Result Label
+local resultLabel = Instance.new("TextLabel")
+resultLabel.Name = "ResultLabel"
+resultLabel.Size = UDim2.new(1, 0, 0, 30)
+resultLabel.Position = UDim2.new(0, 0, 0, 325)
+resultLabel.BackgroundTransparency = 1
+resultLabel.Text = ""
+resultLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+resultLabel.TextSize = 12
+resultLabel.Font = Enum.Font.GothamSemibold
+resultLabel.TextWrapped = true
+resultLabel.Parent = contentFrame
+
+-- ============================================
+-- DRAGGING FUNCTIONALITY (Mobile + Desktop)
+-- ============================================
+
+local function updateDrag(input)
+	if dragging and dragStart and startPos then
+		local delta = input.Position - dragStart
+		mainFrame.Position = UDim2.new(
+			startPos.X.Scale,
+			startPos.X.Offset + delta.X,
+			startPos.Y.Scale,
+			startPos.Y.Offset + delta.Y
+		)
+	end
+end
+
+titleBar.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = input.Position
+		startPos = mainFrame.Position
+
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+titleBar.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		if dragging then
+			updateDrag(input)
+		end
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		if dragging then
+			updateDrag(input)
+		end
+	end
+end)
+
+-- ============================================
+-- MINIMIZE FUNCTIONALITY
+-- ============================================
+
+local minimized = false
+
+minimizeBtn.MouseButton1Click:Connect(function()
+	minimized = not minimized
+	contentFrame.Visible = not minimized
+	if minimized then
+		mainFrame:TweenSize(UDim2.new(0, 320, 0, 45), Enum.EasingDirection.Out, Enum.EasingStyle.Quint, 0.3, true)
+		minimizeBtn.Text = "+"
+	else
+		mainFrame:TweenSize(UDim2.new(0, 320, 0, 420), Enum.EasingDirection.Out, Enum.EasingStyle.Quint, 0.3, true)
+		minimizeBtn.Text = "—"
+		-- Delay showing content until animation is mostly done
+		task.delay(0.2, function()
+			if not minimized then
+				contentFrame.Visible = true
+			end
+		end)
+	end
+end)
+
+-- ============================================
+-- TOGGLE FUNCTIONALITY
+-- ============================================
+
+local function setToggle(state)
+	toggleActive = state
+	if toggleActive then
+		toggleBg.BackgroundColor3 = Color3.fromRGB(50, 180, 80)
+		toggleCircle:TweenPosition(UDim2.new(1, -23, 0.5, -10), Enum.EasingDirection.Out, Enum.EasingStyle.Quint, 0.2, true)
+		toggleCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		statusLabel.Text = "Status: 🟢 Active — Tap a player in-game!"
+		statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+	else
+		toggleBg.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+		toggleCircle:TweenPosition(UDim2.new(0, 3, 0.5, -10), Enum.EasingDirection.Out, Enum.EasingStyle.Quint, 0.2, true)
+		toggleCircle.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
+		statusLabel.Text = "Status: ⚪ Inactive"
+		statusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+	end
+end
+
+toggleButton.MouseButton1Click:Connect(function()
+	setToggle(not toggleActive)
+end)
+
+-- ============================================
+-- HELPER: GET SKIN/OUTFIT FROM CHARACTER
+-- ============================================
+
+local function getPlayerSkin(player)
+	-- Try multiple approaches to find the skin/outfit name
+
+	local character = player.Character
+	if not character then
+		return "Default"
+	end
+
+	-- Method 1: Check Humanoid Description for shirt/pants graphic (common for skin systems)
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		local success, desc = pcall(function()
+			return humanoid:GetAppliedDescription()
+		end)
+		if success and desc then
+			-- Check if there's a specific outfit ID
+			if desc.HatAccessory and desc.HatAccessory ~= "" then
+				-- Has accessories, might indicate a skin
+			end
+		end
+	end
+
+	-- Method 2: Check for a "Skin" or "SkinName" value in the character or player
+	local skinValue = player:FindFirstChild("Skin")
+		or player:FindFirstChild("SkinName")
+		or player:FindFirstChild("CurrentSkin")
+		or player:FindFirstChild("CharacterSkin")
+		or character:FindFirstChild("Skin")
+		or character:FindFirstChild("SkinName")
+		or character:FindFirstChild("CurrentSkin")
+
+	if skinValue and skinValue:IsA("StringValue") then
+		return skinValue.Value
+	elseif skinValue and skinValue:IsA("IntValue") then
+		return tostring(skinValue.Value)
+	end
+
+	-- Method 3: Check leaderstats or other common folders
+	local leaderstats = player:FindFirstChild("leaderstats")
+	if leaderstats then
+		local skinStat = leaderstats:FindFirstChild("Skin") or leaderstats:FindFirstChild("Character")
+		if skinStat then
+			return tostring(skinStat.Value)
+		end
+	end
+
+	-- Method 4: Check the character model name vs player name (morph system often renames)
+	if character.Name ~= player.Name then
+		return character.Name
+	end
+
+	-- Method 5: Look for Shirt/Pants as identifiers
+	local shirt = character:FindFirstChildOfClass("Shirt")
+	if shirt then
+		return shirt.ShirtTemplate
+	end
+
+	-- Method 6: Check all string/int values in player for anything skin-related
+	for _, child in pairs(player:GetChildren()) do
+		if child:IsA("Folder") then
+			for _, subChild in pairs(child:GetChildren()) do
+				local lowerName = string.lower(subChild.Name)
+				if string.find(lowerName, "skin") or string.find(lowerName, "morph") or string.find(lowerName, "character") or string.find(lowerName, "outfit") then
+					if subChild:IsA("StringValue") or subChild:IsA("IntValue") then
+						return tostring(subChild.Value)
+					end
+				end
+			end
+		end
+	end
+
+	-- Method 7: Check HumanoidDescription outfit
+	if humanoid then
+		local success, desc = pcall(function()
+			return humanoid:GetAppliedDescription()
+		end)
+		if success and desc then
+			-- Return a composite identifier
+			local graphicId = desc.GraphicTShirt
+			if graphicId and graphicId ~= 0 then
+				return "TShirt_" .. tostring(graphicId)
+			end
+		end
+	end
+
+	-- Fallback: Return player's display name as skin identifier
+	return player.DisplayName
+end
+
+-- ============================================
+-- PLAYER CLICK DETECTION
+-- ============================================
+
+local mouse = LocalPlayer:GetMouse()
+
+-- For desktop
+mouse.Button1Down:Connect(function()
+	if not toggleActive then return end
+
+	local target = mouse.Target
+	if target then
+		local character = target:FindFirstAncestorOfClass("Model")
+		if character then
+			local targetPlayer = Players:GetPlayerFromCharacter(character)
+			if targetPlayer and targetPlayer ~= LocalPlayer then
+				selectedPlayerName = targetPlayer.Name
+				selectedPlayerId = tostring(targetPlayer.UserId)
+				selectedSkin = getPlayerSkin(targetPlayer)
+
+				nameLabel.Text = "Name: " .. selectedPlayerName
+				idLabel.Text = "ID: " .. selectedPlayerId
+				skinLabel.Text = "Skin: " .. selectedSkin
+
+				resultLabel.Text = "✅ Player selected!"
+				resultLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+
+				-- Flash effect on info section
+				infoSection.BackgroundColor3 = Color3.fromRGB(50, 70, 50)
+				task.delay(0.3, function()
+					infoSection.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+				end)
+			end
+		end
+	end
+end)
+
+-- For mobile touch
+UserInputService.TouchTapInWorld:Connect(function(position, processedByUI)
+	if not toggleActive or processedByUI then return end
+
+	local camera = workspace.CurrentCamera
+	local ray = camera:ViewportPointToRay(position.X, position.Y)
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+	raycastParams.FilterDescendantsInstances = {LocalPlayer.Character}
+
+	local result = workspace:Raycast(ray.Origin, ray.Direction * 1000, raycastParams)
+
+	if result and result.Instance then
+		local character = result.Instance:FindFirstAncestorOfClass("Model")
+		if character then
+			local targetPlayer = Players:GetPlayerFromCharacter(character)
+			if targetPlayer and targetPlayer ~= LocalPlayer then
+				selectedPlayerName = targetPlayer.Name
+				selectedPlayerId = tostring(targetPlayer.UserId)
+				selectedSkin = getPlayerSkin(targetPlayer)
+
+				nameLabel.Text = "Name: " .. selectedPlayerName
+				idLabel.Text = "ID: " .. selectedPlayerId
+				skinLabel.Text = "Skin: " .. selectedSkin
+
+				resultLabel.Text = "✅ Player selected!"
+				resultLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+
+				-- Flash effect
+				infoSection.BackgroundColor3 = Color3.fromRGB(50, 70, 50)
+				task.delay(0.3, function()
+					infoSection.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+				end)
+			end
+		end
+	end
+end)
+
+-- ============================================
+-- MORPH BUTTON
+-- ============================================
+
+morphButton.MouseButton1Click:Connect(function()
+	if selectedPlayerId == "" or selectedSkin == "" then
+		resultLabel.Text = "⚠️ No player selected! Enable toggle and tap a player."
+		resultLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
+		return
+	end
+
+	-- Fire the morph event
+	local args = {
+		[1] = selectedPlayerId,
+		[2] = selectedSkin
+	}
+
+	local success, err = pcall(function()
+		ReplicatedStorage.SendCharMorphEvent:FireServer(unpack(args))
+	end)
+
+	if success then
+		resultLabel.Text = "🔄 Morphing into " .. selectedPlayerName .. "..."
+		resultLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
+
+		-- Button press animation
+		morphButton.BackgroundColor3 = Color3.fromRGB(30, 200, 100)
+		morphButton.Text = "✅ MORPH SENT!"
+		task.delay(1.5, function()
+			morphButton.BackgroundColor3 = Color3.fromRGB(50, 120, 200)
+			morphButton.Text = "🔄 MORPH INTO PLAYER"
+			resultLabel.Text = "✅ Morph command sent successfully!"
+			resultLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+		end)
+	else
+		resultLabel.Text = "❌ Error: " .. tostring(err)
+		resultLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+	end
+end)
+
+-- ============================================
+-- CLEAR BUTTON
+-- ============================================
+
+clearButton.MouseButton1Click:Connect(function()
+	selectedPlayerName = ""
+	selectedPlayerId = ""
+	selectedSkin = ""
+	nameLabel.Text = "Name: N/A"
+	idLabel.Text = "ID: N/A"
+	skinLabel.Text = "Skin: N/A"
+	resultLabel.Text = "🗑️ Selection cleared."
+	resultLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+end)
+
+-- ============================================
+-- BUTTON HOVER EFFECTS
+-- ============================================
+
+local function addHoverEffect(button, normalColor, hoverColor)
+	button.MouseEnter:Connect(function()
+		button.BackgroundColor3 = hoverColor
+	end)
+	button.MouseLeave:Connect(function()
+		button.BackgroundColor3 = normalColor
+	end)
+end
+
+addHoverEffect(morphButton, Color3.fromRGB(50, 120, 200), Color3.fromRGB(70, 150, 230))
+addHoverEffect(clearButton, Color3.fromRGB(180, 50, 50), Color3.fromRGB(210, 70, 70))
+addHoverEffect(minimizeBtn, Color3.fromRGB(60, 60, 80), Color3.fromRGB(80, 80, 100))
+
+-- ============================================
+-- OPENING ANIMATION
+-- ============================================
+
+mainFrame.Size = UDim2.new(0, 0, 0, 0)
+mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+mainFrame:TweenSizeAndPosition(
+	UDim2.new(0, 320, 0, 420),
+	UDim2.new(0.5, -160, 0.5, -210),
+	Enum.EasingDirection.Out,
+	Enum.EasingStyle.Back,
+	0.5,
+	true
+)
+
+print("[MorphGui] Loaded successfully! Toggle the switch and tap a player to select them.")
