@@ -1,52 +1,46 @@
---// Bundle Equipper v4 — Full R6 + R15 + Delta Fix
---// Complete rewrite of equip logic
+--// Bundle Equipper v5 — Full Fix
+--// Fixed: positioning, long IDs, R6, missing parts
 
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
-local TweenService = game:GetService("TweenService")
 local UIS = game:GetService("UserInputService")
 local player = Players.LocalPlayer
 
 ---------------------------------------------------------------
--- EXECUTOR DETECTION
+-- EXECUTOR
 ---------------------------------------------------------------
 local execName = "Unknown"
 pcall(function()
-    if identifyexecutor then
-        execName = identifyexecutor()
+    if identifyexecutor then execName = identifyexecutor()
     elseif syn then execName = "Synapse"
     elseif delta then execName = "Delta"
     elseif fluxus then execName = "Fluxus"
-    elseif KRNL_LOADED then execName = "KRNL"
     end
 end)
 
 ---------------------------------------------------------------
--- FORCE SET LOCKED PROPERTY (MeshId, etc)
+-- FORCE SET LOCKED PROPERTY
 ---------------------------------------------------------------
-local function forceSet(obj, prop, value)
-    local s1 = pcall(function() obj[prop] = value end)
-    if s1 then return true end
-
+local function forceSet(obj, prop, val)
+    local ok = pcall(function() obj[prop] = val end)
+    if ok then return true end
     if sethiddenproperty then
-        local s2 = pcall(sethiddenproperty, obj, prop, value)
-        if s2 then return true end
+        ok = pcall(sethiddenproperty, obj, prop, val)
+        if ok then return true end
     end
-
     if setscriptable then
-        local s3 = pcall(function()
+        ok = pcall(function()
             local old = setscriptable(obj, prop, true)
-            obj[prop] = value
+            obj[prop] = val
             setscriptable(obj, prop, old)
         end)
-        if s3 then return true end
+        if ok then return true end
     end
-
     return false
 end
 
 ---------------------------------------------------------------
--- LOAD ASSET OBJECTS
+-- LOAD ASSET
 ---------------------------------------------------------------
 local function loadAsset(id)
     local ok, objs = pcall(game.GetObjects, game, "rbxassetid://" .. tostring(id))
@@ -55,36 +49,59 @@ local function loadAsset(id)
 end
 
 ---------------------------------------------------------------
--- GET BUNDLE DETAILS
+-- EXTRACT NUMERIC ID FROM ANY INPUT
+---------------------------------------------------------------
+local function extractId(text)
+    if not text or text == "" then return nil end
+    text = tostring(text):gsub("%s+", "")
+    -- Direct number
+    local n = tonumber(text)
+    if n then return math.floor(n) end
+    -- Extract from URL or mixed text (grab longest digit sequence)
+    local best = nil
+    for match in text:gmatch("(%d+)") do
+        local num = tonumber(match)
+        if num and (not best or #match > #tostring(best)) then
+            best = num
+        end
+    end
+    return best
+end
+
+---------------------------------------------------------------
+-- GET BUNDLE INFO
 ---------------------------------------------------------------
 local function getBundleInfo(bundleId)
-    -- Try AssetService
     local ok, info = pcall(function()
         return game:GetService("AssetService"):GetBundleDetailsAsync(bundleId)
     end)
     if ok and info and info.Items then return info end
 
     -- HTTP fallback
-    local urls = {
-        "https://catalog.roproxy.com/v1/bundles/" .. bundleId .. "/details",
-    }
-    for _, url in ipairs(urls) do
-        local ok2, body = pcall(function()
-            if request then return request({Url=url}).Body end
-            if http_request then return http_request({Url=url}).Body end
-            if syn and syn.request then return syn.request({Url=url}).Body end
-            if game.HttpGet then return game:HttpGet(url) end
-        end)
-        if ok2 and body then
-            local ok3, data = pcall(HttpService.JSONDecode, HttpService, body)
-            if ok3 and data then
-                if data[1] then data = data[1] end
-                local items = {}
-                for _, v in ipairs(data.items or {}) do
-                    table.insert(items, {Id = v.id, Name = v.name or "", Type = v.type or ""})
-                end
-                return {Name = data.name or "Bundle", Items = items}
+    local function tryHttp(url)
+        local ok2, body
+        if request then
+            ok2, body = pcall(function() return request({Url=url}).Body end)
+        elseif http_request then
+            ok2, body = pcall(function() return http_request({Url=url}).Body end)
+        elseif syn and syn.request then
+            ok2, body = pcall(function() return syn.request({Url=url}).Body end)
+        elseif game.HttpGet then
+            ok2, body = pcall(game.HttpGet, game, url)
+        end
+        return ok2 and body
+    end
+
+    local body = tryHttp("https://catalog.roproxy.com/v1/bundles/" .. bundleId .. "/details")
+    if body then
+        local ok3, data = pcall(HttpService.JSONDecode, HttpService, body)
+        if ok3 and data then
+            if data[1] then data = data[1] end
+            local items = {}
+            for _, v in ipairs(data.items or {}) do
+                table.insert(items, {Id = v.id, Name = v.name or "", Type = v.type or ""})
             end
+            return {Name = data.name or "Bundle", Items = items}
         end
     end
     return nil
@@ -93,88 +110,113 @@ end
 ---------------------------------------------------------------
 -- R15 PART NAMES
 ---------------------------------------------------------------
-local R15_NAMES = {
+local R15 = {
     "Head","UpperTorso","LowerTorso",
     "LeftUpperArm","LeftLowerArm","LeftHand",
     "RightUpperArm","RightLowerArm","RightHand",
     "LeftUpperLeg","LeftLowerLeg","LeftFoot",
     "RightUpperLeg","RightLowerLeg","RightFoot",
 }
-local R15_SET = {}
-for _,v in ipairs(R15_NAMES) do R15_SET[v] = true end
+local R15Set = {}
+for _, v in ipairs(R15) do R15Set[v] = true end
 
 ---------------------------------------------------------------
--- R6 BodyPart enum mapping
----------------------------------------------------------------
-local R6_BODYPART_MAP = {
-    [Enum.BodyPart.Torso] = "Torso",
-    [Enum.BodyPart.LeftArm] = "Left Arm",
-    [Enum.BodyPart.RightArm] = "Right Arm",
-    [Enum.BodyPart.LeftLeg] = "Left Leg",
-    [Enum.BodyPart.RightLeg] = "Right Leg",
-}
-
----------------------------------------------------------------
--- DEEP SCAN: Find all usable parts in loaded objects
+-- DEEP SCAN LOADED OBJECTS
+-- Finds ALL usable parts at any nesting depth
 ---------------------------------------------------------------
 local function deepScan(objects)
-    local r15Parts = {}     -- name -> MeshPart
-    local charMeshes = {}   -- list of CharacterMesh
-    local specMeshes = {}   -- parent name -> SpecialMesh
-    local faces = {}        -- list of Decals
-    local debugLog = {}
+    local r15 = {}          -- name -> MeshPart
+    local charMeshes = {}   -- CharacterMesh list
+    local specMeshes = {}   -- parentName -> SpecialMesh
+    local faces = {}        -- Decal list
+    local unknownMesh = {}  -- MeshParts with non-R15 names
+    local logs = {}
 
-    local function scan(obj, path)
-        path = path or obj.Name
+    local function scan(obj, depth)
+        if depth > 15 then return end
 
         if obj:IsA("MeshPart") then
-            -- Check exact R15 name
-            if R15_SET[obj.Name] then
-                r15Parts[obj.Name] = obj
-                table.insert(debugLog, "R15 MeshPart: " .. obj.Name .. " @ " .. path)
+            if R15Set[obj.Name] then
+                r15[obj.Name] = obj
+                table.insert(logs, "✓ R15: " .. obj.Name)
             else
-                -- Check if parent folder name gives a hint
-                -- Some assets name the MeshPart differently but it's inside a named folder
-                table.insert(debugLog, "MeshPart (non-R15 name): " .. obj.Name .. " @ " .. path)
+                table.insert(unknownMesh, obj)
+                table.insert(logs, "? MeshPart: " .. obj.Name)
             end
         end
 
         if obj:IsA("CharacterMesh") then
             table.insert(charMeshes, obj)
-            local bpName = "?"
-            pcall(function() bpName = tostring(obj.BodyPart) end)
-            table.insert(debugLog, "CharacterMesh: " .. bpName .. " @ " .. path)
+            table.insert(logs, "✓ CharMesh: " .. tostring(obj.BodyPart))
         end
 
         if obj:IsA("SpecialMesh") then
-            local pName = (obj.Parent and obj.Parent.Name) or "unknown"
+            local pName = obj.Parent and obj.Parent.Name or "?"
             specMeshes[pName] = obj
-            table.insert(debugLog, "SpecialMesh in " .. pName .. " @ " .. path)
+            table.insert(logs, "✓ SpecMesh in: " .. pName)
         end
 
-        if obj:IsA("Decal") and (obj.Name:lower() == "face") then
+        if obj:IsA("Decal") and obj.Name:lower() == "face" then
             table.insert(faces, obj)
-            table.insert(debugLog, "Face Decal @ " .. path)
+            table.insert(logs, "✓ Face")
         end
 
         for _, child in ipairs(obj:GetChildren()) do
-            scan(child, path .. "/" .. child.Name)
+            scan(child, depth + 1)
         end
     end
 
-    for _, obj in ipairs(objects) do
-        scan(obj, obj.Name)
-    end
+    for _, obj in ipairs(objects) do scan(obj, 0) end
+    return r15, charMeshes, specMeshes, faces, unknownMesh, logs
+end
 
-    return r15Parts, charMeshes, specMeshes, faces, debugLog
+---------------------------------------------------------------
+-- GUESS WHICH R15 PART AN UNKNOWN MESHPART COULD BE
+-- Uses name similarity matching
+---------------------------------------------------------------
+local function guessR15Name(meshPartName)
+    local lower = meshPartName:lower()
+    local guesses = {
+        {"head", "Head"},
+        {"uppertorso", "UpperTorso"}, {"lowertorso", "LowerTorso"},
+        {"torso", "UpperTorso"},
+        {"leftupperarm", "LeftUpperArm"}, {"leftlowerarm", "LeftLowerArm"}, {"lefthand", "LeftHand"},
+        {"rightupperarm", "RightUpperArm"}, {"rightlowerarm", "RightLowerArm"}, {"righthand", "RightHand"},
+        {"leftupperleg", "LeftUpperLeg"}, {"leftlowerleg", "LeftLowerLeg"}, {"leftfoot", "LeftFoot"},
+        {"rightupperleg", "RightUpperLeg"}, {"rightlowerleg", "RightLowerLeg"}, {"rightfoot", "RightFoot"},
+        -- Partial matches
+        {"larm", "LeftUpperArm"}, {"rarm", "RightUpperArm"},
+        {"lleg", "LeftUpperLeg"}, {"rleg", "RightUpperLeg"},
+        {"leftarm", "LeftUpperArm"}, {"rightarm", "RightUpperArm"},
+        {"leftleg", "LeftUpperLeg"}, {"rightleg", "RightUpperLeg"},
+    }
+    for _, g in ipairs(guesses) do
+        if lower:find(g[1]) then return g[2] end
+    end
+    return nil
+end
+
+---------------------------------------------------------------
+-- COPY ATTACHMENTS (FIXES "PARTS FAR AWAY")
+---------------------------------------------------------------
+local function copyAttachments(source, target)
+    for _, sourceAtt in ipairs(source:GetChildren()) do
+        if sourceAtt:IsA("Attachment") then
+            local targetAtt = target:FindFirstChild(sourceAtt.Name)
+            if targetAtt and targetAtt:IsA("Attachment") then
+                targetAtt.CFrame = sourceAtt.CFrame
+            end
+        end
+    end
 end
 
 ---------------------------------------------------------------
 -- APPLY R15 MESH SWAP
 ---------------------------------------------------------------
-local function applyR15(r15Parts, specMeshes, faces, character)
+local function applyR15(r15Parts, specMeshes, faces, unknownMesh, character)
     local applied = 0
 
+    -- Apply known R15 parts
     for name, source in pairs(r15Parts) do
         local target = character:FindFirstChild(name)
         if target and target:IsA("MeshPart") then
@@ -182,25 +224,61 @@ local function applyR15(r15Parts, specMeshes, faces, character)
             pcall(function() meshId = source.MeshId end)
             if meshId ~= "" and forceSet(target, "MeshId", meshId) then
                 applied += 1
+
+                -- Texture
                 pcall(function()
-                    if source.TextureID ~= "" then
-                        target.TextureID = source.TextureID
-                    end
+                    if source.TextureID ~= "" then target.TextureID = source.TextureID end
                 end)
+
+                -- Size
                 pcall(function() target.Size = source.Size end)
+
+                -- Color
                 pcall(function() target.Color = source.Color end)
 
+                -- FIX POSITIONING: Copy attachment CFrames
+                copyAttachments(source, target)
+
                 -- SurfaceAppearance
-                local oldSA = target:FindFirstChildOfClass("SurfaceAppearance")
+                for _, sa in ipairs(target:GetChildren()) do
+                    if sa:IsA("SurfaceAppearance") then sa:Destroy() end
+                end
                 local newSA = source:FindFirstChildOfClass("SurfaceAppearance")
-                if oldSA then oldSA:Destroy() end
                 if newSA then newSA:Clone().Parent = target end
 
                 -- WrapTarget
-                local oldW = target:FindFirstChildOfClass("WrapTarget")
-                local newW = source:FindFirstChildOfClass("WrapTarget")
-                if oldW then oldW:Destroy() end
-                if newW then newW:Clone().Parent = target end
+                for _, wt in ipairs(target:GetChildren()) do
+                    if wt:IsA("WrapTarget") then wt:Destroy() end
+                end
+                local newWT = source:FindFirstChildOfClass("WrapTarget")
+                if newWT then newWT:Clone().Parent = target end
+            end
+        end
+    end
+
+    -- Try unknown MeshParts by guessing their body part
+    for _, source in ipairs(unknownMesh) do
+        local guessedName = guessR15Name(source.Name)
+        if guessedName and not r15Parts[guessedName] then
+            local target = character:FindFirstChild(guessedName)
+            if target and target:IsA("MeshPart") then
+                local meshId = ""
+                pcall(function() meshId = source.MeshId end)
+                if meshId ~= "" and forceSet(target, "MeshId", meshId) then
+                    applied += 1
+                    pcall(function()
+                        if source.TextureID ~= "" then target.TextureID = source.TextureID end
+                    end)
+                    pcall(function() target.Size = source.Size end)
+                    pcall(function() target.Color = source.Color end)
+                    copyAttachments(source, target)
+
+                    for _, sa in ipairs(target:GetChildren()) do
+                        if sa:IsA("SurfaceAppearance") then sa:Destroy() end
+                    end
+                    local newSA = source:FindFirstChildOfClass("SurfaceAppearance")
+                    if newSA then newSA:Clone().Parent = target end
+                end
             end
         end
     end
@@ -241,97 +319,93 @@ end
 ---------------------------------------------------------------
 -- APPLY R6 MESH SWAP
 ---------------------------------------------------------------
-local function applyR6(charMeshes, specMeshes, faces, r15Parts, character)
+local function applyR6(charMeshes, specMeshes, faces, r15Parts, unknownMesh, character)
     local applied = 0
 
-    -- Direct CharacterMesh application
+    -- Apply CharacterMeshes directly
     for _, cm in ipairs(charMeshes) do
-        -- Remove existing CharacterMesh with same BodyPart
         for _, existing in ipairs(character:GetChildren()) do
             if existing:IsA("CharacterMesh") then
                 pcall(function()
-                    if existing.BodyPart == cm.BodyPart then
-                        existing:Destroy()
-                    end
+                    if existing.BodyPart == cm.BodyPart then existing:Destroy() end
                 end)
             end
         end
         pcall(function()
-            local clone = cm:Clone()
-            clone.Parent = character
+            cm:Clone().Parent = character
             applied += 1
         end)
     end
 
     -- Head SpecialMesh
-    local headMesh = specMeshes["Head"]
-    if headMesh then
-        local head = character:FindFirstChild("Head")
-        if head then
-            local existing = head:FindFirstChildOfClass("SpecialMesh")
-            if existing then
-                pcall(function() existing.MeshId = headMesh.MeshId end)
-                pcall(function() existing.TextureId = headMesh.TextureId end)
-                pcall(function() existing.Scale = headMesh.Scale end)
-                pcall(function() existing.Offset = headMesh.Offset end)
-            else
-                pcall(function() headMesh:Clone().Parent = head end)
+    for parentName, mesh in pairs(specMeshes) do
+        if parentName == "Head" or parentName:lower():find("head") then
+            local head = character:FindFirstChild("Head")
+            if head then
+                local existing = head:FindFirstChildOfClass("SpecialMesh")
+                if existing then
+                    pcall(function() existing.MeshId = mesh.MeshId end)
+                    pcall(function() existing.TextureId = mesh.TextureId end)
+                    pcall(function() existing.Scale = mesh.Scale end)
+                    pcall(function() existing.Offset = mesh.Offset end)
+                else
+                    pcall(function() mesh:Clone().Parent = head end)
+                end
+                applied += 1
             end
-            applied += 1
         end
     end
 
-    -- If no CharacterMeshes found but R15 parts exist,
-    -- try to convert R15 mesh IDs into R6 SpecialMesh overlays
-    if #charMeshes == 0 and next(r15Parts) then
-        -- Try converting: add SpecialMesh to R6 Parts
-        local r6Mapping = {
-            ["UpperTorso"] = "Torso", ["LowerTorso"] = "Torso",
-            ["LeftUpperArm"] = "Left Arm", ["LeftLowerArm"] = "Left Arm", ["LeftHand"] = "Left Arm",
-            ["RightUpperArm"] = "Right Arm", ["RightLowerArm"] = "Right Arm", ["RightHand"] = "Right Arm",
-            ["LeftUpperLeg"] = "Left Leg", ["LeftLowerLeg"] = "Left Leg", ["LeftFoot"] = "Left Leg",
-            ["RightUpperLeg"] = "Right Leg", ["RightLowerLeg"] = "Right Leg", ["RightFoot"] = "Right Leg",
-            ["Head"] = "Head",
+    -- If no CharacterMeshes, try converting R15 parts to R6
+    if #charMeshes == 0 then
+        local allMeshParts = {}
+        for name, mp in pairs(r15Parts) do allMeshParts[name] = mp end
+        for _, mp in ipairs(unknownMesh) do
+            local guess = guessR15Name(mp.Name)
+            if guess then allMeshParts[guess] = mp end
+        end
+
+        -- Map R15 -> R6 (pick main part per limb)
+        local mapping = {
+            {r15 = {"UpperTorso","LowerTorso"}, r6 = "Torso"},
+            {r15 = {"LeftUpperArm","LeftLowerArm","LeftHand"}, r6 = "Left Arm"},
+            {r15 = {"RightUpperArm","RightLowerArm","RightHand"}, r6 = "Right Arm"},
+            {r15 = {"LeftUpperLeg","LeftLowerLeg","LeftFoot"}, r6 = "Left Leg"},
+            {r15 = {"RightUpperLeg","RightLowerLeg","RightFoot"}, r6 = "Right Leg"},
+            {r15 = {"Head"}, r6 = "Head"},
         }
 
-        -- For R6 we pick just the main R15 part per R6 limb
-        local primaryR15 = {
-            ["Torso"] = "UpperTorso",
-            ["Left Arm"] = "LeftUpperArm",
-            ["Right Arm"] = "RightUpperArm",
-            ["Left Leg"] = "LeftUpperLeg",
-            ["Right Leg"] = "RightUpperLeg",
-            ["Head"] = "Head",
-        }
-
-        for r6Name, r15Name in pairs(primaryR15) do
-            local source = r15Parts[r15Name]
-            if source then
-                local target = character:FindFirstChild(r6Name)
-                if target and target:IsA("BasePart") then
-                    local meshId = ""
-                    pcall(function() meshId = source.MeshId end)
-                    if meshId ~= "" then
-                        local existing = target:FindFirstChildOfClass("SpecialMesh")
-                        if existing then
-                            pcall(function() existing.MeshId = meshId end)
-                            pcall(function()
-                                if source.TextureID ~= "" then
-                                    existing.TextureId = source.TextureID
-                                end
-                            end)
-                        else
-                            pcall(function()
-                                local sm = Instance.new("SpecialMesh")
-                                sm.MeshType = Enum.MeshType.FileMesh
-                                sm.MeshId = meshId
-                                if source.TextureID and source.TextureID ~= "" then
-                                    sm.TextureId = source.TextureID
-                                end
-                                sm.Parent = target
-                            end)
+        for _, map in ipairs(mapping) do
+            for _, r15Name in ipairs(map.r15) do
+                local source = allMeshParts[r15Name]
+                if source then
+                    local target = character:FindFirstChild(map.r6)
+                    if target and target:IsA("BasePart") then
+                        local meshId = ""
+                        pcall(function() meshId = source.MeshId end)
+                        if meshId ~= "" then
+                            local existing = target:FindFirstChildOfClass("SpecialMesh")
+                            if existing then
+                                pcall(function() existing.MeshId = meshId end)
+                                pcall(function()
+                                    if source.TextureID and source.TextureID ~= "" then
+                                        existing.TextureId = source.TextureID
+                                    end
+                                end)
+                            else
+                                pcall(function()
+                                    local sm = Instance.new("SpecialMesh")
+                                    sm.MeshType = Enum.MeshType.FileMesh
+                                    sm.MeshId = meshId
+                                    if source.TextureID and source.TextureID ~= "" then
+                                        sm.TextureId = source.TextureID
+                                    end
+                                    sm.Parent = target
+                                end)
+                            end
+                            applied += 1
+                            break -- Only apply first matching R15 part per R6 limb
                         end
-                        applied += 1
                     end
                 end
             end
@@ -354,62 +428,9 @@ local function applyR6(charMeshes, specMeshes, faces, r15Parts, character)
 end
 
 ---------------------------------------------------------------
--- DESCRIPTION METHOD: FULL APPLY
+-- EQUIP BUNDLE
 ---------------------------------------------------------------
-local function applyDescriptionFull(outfitId, humanoid)
-    local desc = Players:GetHumanoidDescriptionFromOutfitId(outfitId)
-    humanoid:ApplyDescription(desc)
-    return true
-end
-
----------------------------------------------------------------
--- DESCRIPTION METHOD: BODY ONLY (keep clothes/accessories)
----------------------------------------------------------------
-local function applyDescriptionBodyOnly(outfitId, humanoid)
-    local bundleDesc = Players:GetHumanoidDescriptionFromOutfitId(outfitId)
-    local currentDesc = humanoid:GetAppliedDescription()
-
-    -- Copy ALL body properties unconditionally
-    local meshProps = {"Head","Torso","LeftArm","RightArm","LeftLeg","RightLeg"}
-    for _, prop in ipairs(meshProps) do
-        pcall(function()
-            currentDesc[prop] = bundleDesc[prop]
-        end)
-    end
-
-    -- Face
-    pcall(function() currentDesc.Face = bundleDesc.Face end)
-
-    -- Scales
-    local scaleProps = {
-        "BodyTypeScale","ProportionScale","HeadScale",
-        "DepthScale","HeightScale","WidthScale"
-    }
-    for _, prop in ipairs(scaleProps) do
-        pcall(function()
-            currentDesc[prop] = bundleDesc[prop]
-        end)
-    end
-
-    -- Body colors
-    local colorProps = {
-        "HeadColor","TorsoColor","LeftArmColor",
-        "RightArmColor","LeftLegColor","RightLegColor"
-    }
-    for _, prop in ipairs(colorProps) do
-        pcall(function()
-            currentDesc[prop] = bundleDesc[prop]
-        end)
-    end
-
-    humanoid:ApplyDescription(currentDesc)
-    return true
-end
-
----------------------------------------------------------------
--- MAIN EQUIP FUNCTION: BUNDLE
----------------------------------------------------------------
-local keepClothes = false -- toggled by UI
+local keepClothes = false
 
 local function equipBundle(bundleId, log)
     local char = player.Character
@@ -420,56 +441,64 @@ local function equipBundle(bundleId, log)
 
     log("Fetching bundle " .. bundleId .. "...", Color3.fromRGB(255, 220, 80))
     local info = getBundleInfo(bundleId)
-    if not info then error("Cannot get bundle info for " .. bundleId) end
-    local name = info.Name or "Bundle"
-    log("Found: " .. name .. " (" .. #info.Items .. " items)", Color3.fromRGB(255, 220, 80))
+    if not info then error("Cannot fetch bundle " .. bundleId) end
 
-    -- Gather asset IDs and outfit ID
+    local name = info.Name or "Bundle"
     local assetIds = {}
     local outfitId = nil
+
     for _, item in ipairs(info.Items) do
         if item.Type == "UserOutfit" then outfitId = item.Id end
         if item.Type == "Asset" then table.insert(assetIds, item.Id) end
     end
 
-    -- METHOD 1: HumanoidDescription
+    log(name .. " — " .. #assetIds .. " assets, outfit: " .. tostring(outfitId), Color3.fromRGB(255, 220, 80))
+
+    -- METHOD 1: Description
     if outfitId then
-        log("Trying Description method (outfit " .. outfitId .. ")...", Color3.fromRGB(255, 220, 80))
-        local descOk, descErr
-        if keepClothes then
-            descOk, descErr = pcall(applyDescriptionBodyOnly, outfitId, hum)
-        else
-            descOk, descErr = pcall(applyDescriptionFull, outfitId, hum)
-        end
+        log("Trying HumanoidDescription...", Color3.fromRGB(255, 220, 80))
+        local descOk = pcall(function()
+            if keepClothes then
+                local bundleDesc = Players:GetHumanoidDescriptionFromOutfitId(outfitId)
+                local curDesc = hum:GetAppliedDescription()
+                for _, prop in ipairs({"Head","Torso","LeftArm","RightArm","LeftLeg","RightLeg","Face"}) do
+                    pcall(function() curDesc[prop] = bundleDesc[prop] end)
+                end
+                for _, prop in ipairs({"BodyTypeScale","ProportionScale","HeadScale","DepthScale","HeightScale","WidthScale"}) do
+                    pcall(function() curDesc[prop] = bundleDesc[prop] end)
+                end
+                for _, prop in ipairs({"HeadColor","TorsoColor","LeftArmColor","RightArmColor","LeftLegColor","RightLegColor"}) do
+                    pcall(function() curDesc[prop] = bundleDesc[prop] end)
+                end
+                hum:ApplyDescription(curDesc)
+            else
+                local desc = Players:GetHumanoidDescriptionFromOutfitId(outfitId)
+                hum:ApplyDescription(desc)
+            end
+        end)
         if descOk then
-            return name, "HumanoidDescription"
+            return name, "Description" .. (keepClothes and " (body only)" or " (full)")
         end
-        log("Description failed: " .. tostring(descErr), Color3.fromRGB(255, 150, 50))
+        log("Description failed, trying mesh swap...", Color3.fromRGB(255, 180, 50))
     end
 
-    -- METHOD 2: Mesh Swap
-    log("Trying mesh swap (" .. #assetIds .. " assets)...", Color3.fromRGB(255, 220, 80))
+    -- METHOD 2: Mesh swap all assets
+    log("Mesh swapping " .. #assetIds .. " assets...", Color3.fromRGB(255, 220, 80))
     local totalApplied = 0
-    local allDebug = {}
 
     for i, assetId in ipairs(assetIds) do
-        log(string.format("Asset %d/%d (ID %d)...", i, #assetIds, assetId), Color3.fromRGB(255, 220, 80))
+        log(string.format("Loading %d/%d (ID: %d)...", i, #assetIds, assetId), Color3.fromRGB(255, 220, 80))
         local objs = loadAsset(assetId)
         if objs then
-            local r15Parts, charMeshes, specMeshes, faces, debugLog = deepScan(objs)
-            for _, d in ipairs(debugLog) do table.insert(allDebug, d) end
-
-            local count = 0
+            local r15Parts, charMeshes, specMeshes, faces2, unknownMesh, logs2 = deepScan(objs)
+            local count
             if isR15 then
-                count = applyR15(r15Parts, specMeshes, faces, char)
+                count = applyR15(r15Parts, specMeshes, faces2, unknownMesh, char)
             else
-                count = applyR6(charMeshes, specMeshes, faces, r15Parts, char)
+                count = applyR6(charMeshes, specMeshes, faces2, r15Parts, unknownMesh, char)
             end
             totalApplied += count
-
             for _, o in ipairs(objs) do pcall(game.Destroy, o) end
-        else
-            table.insert(allDebug, "FAILED to load asset " .. assetId)
         end
     end
 
@@ -477,14 +506,11 @@ local function equipBundle(bundleId, log)
         return name, "MeshSwap (" .. totalApplied .. " parts)"
     end
 
-    -- Show what was found for debugging
-    local debugStr = table.concat(allDebug, "\n")
-    error("0 parts applied.\nRig: " .. (isR15 and "R15" or "R6") ..
-        "\nScanned " .. #assetIds .. " assets\nFound:\n" .. debugStr)
+    error("No parts applied from " .. #assetIds .. " assets. Rig: " .. (isR15 and "R15" or "R6"))
 end
 
 ---------------------------------------------------------------
--- MAIN EQUIP FUNCTION: SINGLE ASSET
+-- EQUIP SINGLE ASSET
 ---------------------------------------------------------------
 local function equipAsset(assetId, log)
     local char = player.Character
@@ -495,17 +521,21 @@ local function equipAsset(assetId, log)
 
     log("Loading asset " .. assetId .. "...", Color3.fromRGB(255, 220, 80))
     local objs = loadAsset(assetId)
-    if not objs then error("game:GetObjects failed for " .. assetId) end
+    if not objs then error("GetObjects failed for " .. assetId) end
 
-    local r15Parts, charMeshes, specMeshes, faces, debugLog = deepScan(objs)
+    local r15Parts, charMeshes, specMeshes, faces, unknownMesh, logs2 = deepScan(objs)
 
-    log("Scan: " .. #debugLog .. " items found", Color3.fromRGB(255, 220, 80))
+    -- Debug count
+    local r15Count = 0
+    for _ in pairs(r15Parts) do r15Count += 1 end
+    log(string.format("Found: %d R15, %d CharMesh, %d Unknown, %d Face",
+        r15Count, #charMeshes, #unknownMesh, #faces), Color3.fromRGB(255, 220, 80))
 
-    local count = 0
+    local count
     if isR15 then
-        count = applyR15(r15Parts, specMeshes, faces, char)
+        count = applyR15(r15Parts, specMeshes, faces, unknownMesh, char)
     else
-        count = applyR6(charMeshes, specMeshes, faces, r15Parts, char)
+        count = applyR6(charMeshes, specMeshes, faces, r15Parts, unknownMesh, char)
     end
 
     for _, o in ipairs(objs) do pcall(game.Destroy, o) end
@@ -514,25 +544,28 @@ local function equipAsset(assetId, log)
         return "Asset " .. assetId, "MeshSwap (" .. count .. " parts)"
     end
 
-    local debugStr = table.concat(debugLog, "\n")
-    error("0 parts applied.\nRig: " .. (isR15 and "R15" or "R6") .. "\nFound:\n" .. debugStr)
+    -- Show what was found for debugging
+    local debugParts = {}
+    for name in pairs(r15Parts) do table.insert(debugParts, name) end
+    for _, m in ipairs(unknownMesh) do table.insert(debugParts, "?" .. m.Name) end
+    error("0 applied. Rig: " .. (isR15 and "R15" or "R6") ..
+        ". Parts found: " .. (next(debugParts) and table.concat(debugParts, ", ") or "none") ..
+        "\nScan log:\n" .. table.concat(logs2, "\n"))
 end
 
 ---------------------------------------------------------------
--- AUTO EQUIP (bundle or asset)
+-- AUTO: TRY BUNDLE THEN ASSET
 ---------------------------------------------------------------
 local function equipAny(id, log)
-    -- Try bundle
-    log("Trying as bundle...", Color3.fromRGB(255, 220, 80))
-    local bOk, bName, bMethod = pcall(equipBundle, id, log)
-    if bOk then return bName, bMethod end
+    log("Auto-detecting ID " .. id .. "...", Color3.fromRGB(255, 220, 80))
+    local bOk, bResult, bMethod = pcall(equipBundle, id, log)
+    if bOk then return bResult, bMethod end
 
-    -- Try asset
-    log("Not a bundle, trying as asset...", Color3.fromRGB(255, 180, 50))
-    local aOk, aName, aMethod = pcall(equipAsset, id, log)
-    if aOk then return aName, aMethod end
+    log("Not a bundle, trying asset...", Color3.fromRGB(255, 180, 50))
+    local aOk, aResult, aMethod = pcall(equipAsset, id, log)
+    if aOk then return aResult, aMethod end
 
-    error("Bundle: " .. tostring(bName) .. "\nAsset: " .. tostring(aName))
+    error("Bundle: " .. tostring(bResult) .. "\nAsset: " .. tostring(aResult))
 end
 
 ---------------------------------------------------------------
@@ -545,15 +578,13 @@ local function doHeadless()
     if not head then error("No head") end
 
     head.Transparency = 1
-    if head:IsA("MeshPart") then
-        forceSet(head, "MeshId", "")
-    end
+    if head:IsA("MeshPart") then forceSet(head, "MeshId", "") end
 
-    for _, c in ipairs(head:GetChildren()) do
-        if c:IsA("Decal") then c.Transparency = 1 end
-        if c:IsA("SpecialMesh") then
-            pcall(function() c.Scale = Vector3.zero end)
-            pcall(function() c.MeshId = "" end)
+    for _, ch in ipairs(head:GetChildren()) do
+        if ch:IsA("Decal") then ch.Transparency = 1 end
+        if ch:IsA("SpecialMesh") then
+            pcall(function() ch.Scale = Vector3.zero end)
+            pcall(function() ch.MeshId = "" end)
         end
     end
 
@@ -561,31 +592,28 @@ local function doHeadless()
         if acc:IsA("Accessory") then
             local handle = acc:FindFirstChild("Handle")
             if handle then
-                local headAcc = false
+                local isHead = false
                 for _, att in ipairs(handle:GetChildren()) do
                     if att:IsA("Attachment") then
                         local n = att.Name:lower()
                         if n:find("hat") or n:find("hair") or n:find("head") or n:find("face") then
-                            headAcc = true
+                            isHead = true
                             break
                         end
                     end
                 end
-                if not headAcc then
+                if not isHead then
                     pcall(function()
-                        if head and (handle.Position - head.Position).Magnitude < 3 then
-                            headAcc = true
+                        if (handle.Position - head.Position).Magnitude < 3 then
+                            isHead = true
                         end
                     end)
                 end
-                if headAcc then
+                if isHead then
                     handle.Transparency = 1
                     for _, m in ipairs(handle:GetChildren()) do
                         if m:IsA("SpecialMesh") then
                             pcall(function() m.Scale = Vector3.zero end)
-                        end
-                        if m:IsA("MeshPart") then
-                            m.Transparency = 1
                         end
                     end
                 end
@@ -595,12 +623,11 @@ local function doHeadless()
 end
 
 ---------------------------------------------------------------
--- RESET AVATAR
+-- RESET
 ---------------------------------------------------------------
 local function doReset()
     local char = player.Character
-    if not char then error("No character") end
-    local hum = char:FindFirstChildOfClass("Humanoid")
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
     if not hum then error("No humanoid") end
     local desc = Players:GetHumanoidDescriptionFromUserId(player.UserId)
     hum:ApplyDescription(desc)
@@ -610,142 +637,134 @@ end
 -- GUI
 ---------------------------------------------------------------
 local gui = Instance.new("ScreenGui")
-gui.Name = "BundleV4"
+gui.Name = "BundleV5"
 gui.ResetOnSpawn = false
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-if syn and syn.protect_gui then pcall(syn.protect_gui, gui) end
-if protect_gui then pcall(protect_gui, gui) end
+pcall(function() if syn then syn.protect_gui(gui) end end)
+pcall(function() if protect_gui then protect_gui(gui) end end)
 
-local main = Instance.new("Frame")
-main.Size = UDim2.new(0, 350, 0, 355)
-main.Position = UDim2.new(0.5, -175, 0, 20)
-main.BackgroundColor3 = Color3.fromRGB(16, 16, 24)
+local main = Instance.new("Frame", gui)
+main.Size = UDim2.new(0, 360, 0, 390)
+main.Position = UDim2.new(0.5, -180, 0, 18)
+main.BackgroundColor3 = Color3.fromRGB(14, 14, 22)
 main.BorderSizePixel = 0
 main.Active = true
 main.Draggable = true
-main.Parent = gui
 Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
+local mStroke = Instance.new("UIStroke", main)
+mStroke.Color = Color3.fromRGB(100, 50, 220)
+mStroke.Thickness = 1.5
 
-local borderStroke = Instance.new("UIStroke")
-borderStroke.Color = Color3.fromRGB(90, 50, 200)
-borderStroke.Thickness = 1.5
-borderStroke.Parent = main
-
--- TITLE
-local titleBar = Instance.new("Frame")
-titleBar.Size = UDim2.new(1, 0, 0, 38)
-titleBar.BackgroundColor3 = Color3.fromRGB(22, 22, 34)
-titleBar.BorderSizePixel = 0
-titleBar.Parent = main
-Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 12)
-local tFix = Instance.new("Frame")
-tFix.Size = UDim2.new(1, 0, 0, 12)
-tFix.Position = UDim2.new(0, 0, 1, -12)
-tFix.BackgroundColor3 = titleBar.BackgroundColor3
+-- Title
+local tBar = Instance.new("Frame", main)
+tBar.Size = UDim2.new(1, 0, 0, 40)
+tBar.BackgroundColor3 = Color3.fromRGB(20, 20, 32)
+tBar.BorderSizePixel = 0
+Instance.new("UICorner", tBar).CornerRadius = UDim.new(0, 12)
+local tFix = Instance.new("Frame", tBar)
+tFix.Size = UDim2.new(1, 0, 0, 14)
+tFix.Position = UDim2.new(0, 0, 1, -14)
+tFix.BackgroundColor3 = tBar.BackgroundColor3
 tFix.BorderSizePixel = 0
-tFix.Parent = titleBar
 
-Instance.new("TextLabel", titleBar).Size = UDim2.new(1, -80, 1, 0)
-local tLabel = titleBar:FindFirstChildOfClass("TextLabel")
+local tLabel = Instance.new("TextLabel", tBar)
+tLabel.Size = UDim2.new(1, -80, 1, 0)
 tLabel.Position = UDim2.new(0, 14, 0, 0)
 tLabel.BackgroundTransparency = 1
-tLabel.Text = "🎭 Bundle Equipper v4"
-tLabel.TextColor3 = Color3.new(1, 1, 1)
+tLabel.Text = "🎭 Bundle Equipper v5"
+tLabel.TextColor3 = Color3.new(1,1,1)
 tLabel.TextSize = 15
 tLabel.Font = Enum.Font.GothamBold
 tLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-local execLabel = Instance.new("TextLabel", titleBar)
-execLabel.Size = UDim2.new(0, 60, 0, 14)
-execLabel.Position = UDim2.new(1, -100, 0, 12)
-execLabel.BackgroundTransparency = 1
-execLabel.Text = execName
-execLabel.TextColor3 = Color3.fromRGB(80, 200, 80)
-execLabel.TextSize = 10
-execLabel.Font = Enum.Font.GothamBold
-execLabel.TextXAlignment = Enum.TextXAlignment.Right
+local eLabel = Instance.new("TextLabel", tBar)
+eLabel.Size = UDim2.new(0, 70, 0, 14)
+eLabel.Position = UDim2.new(1, -108, 0, 13)
+eLabel.BackgroundTransparency = 1
+eLabel.Text = execName
+eLabel.TextColor3 = Color3.fromRGB(80, 200, 80)
+eLabel.TextSize = 10
+eLabel.Font = Enum.Font.GothamBold
+eLabel.TextXAlignment = Enum.TextXAlignment.Right
 
-local closeBtn = Instance.new("TextButton", titleBar)
+local closeBtn = Instance.new("TextButton", tBar)
 closeBtn.Size = UDim2.new(0, 28, 0, 28)
-closeBtn.Position = UDim2.new(1, -34, 0, 5)
+closeBtn.Position = UDim2.new(1, -34, 0, 6)
 closeBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
 closeBtn.BorderSizePixel = 0
 closeBtn.Text = "✕"
-closeBtn.TextColor3 = Color3.new(1, 1, 1)
+closeBtn.TextColor3 = Color3.new(1,1,1)
 closeBtn.TextSize = 12
 closeBtn.Font = Enum.Font.GothamBold
 Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 6)
 
--- CONTENT
-local c = Instance.new("Frame", main)
-c.Name = "Content"
-c.Size = UDim2.new(1, -24, 1, -50)
-c.Position = UDim2.new(0, 12, 0, 44)
-c.BackgroundTransparency = 1
+-- Content
+local ct = Instance.new("Frame", main)
+ct.Size = UDim2.new(1, -24, 1, -52)
+ct.Position = UDim2.new(0, 12, 0, 46)
+ct.BackgroundTransparency = 1
 
--- Rig type indicator
-local rigLabel = Instance.new("TextLabel", c)
+-- Rig label
+local rigLabel = Instance.new("TextLabel", ct)
 rigLabel.Size = UDim2.new(1, 0, 0, 14)
 rigLabel.BackgroundTransparency = 1
 rigLabel.TextSize = 10
 rigLabel.Font = Enum.Font.GothamBold
 rigLabel.TextXAlignment = Enum.TextXAlignment.Left
-rigLabel.TextColor3 = Color3.fromRGB(120, 120, 150)
 
-local function updateRigLabel()
-    local char = player.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
+local function updateRig()
+    local ch = player.Character
+    local hum = ch and ch:FindFirstChildOfClass("Humanoid")
     if hum then
-        local rig = hum.RigType == Enum.HumanoidRigType.R15 and "R15" or "R6"
-        rigLabel.Text = "YOUR RIG: " .. rig .. "  |  ENTER BUNDLE OR ASSET ID:"
-        rigLabel.TextColor3 = hum.RigType == Enum.HumanoidRigType.R15
-            and Color3.fromRGB(80, 180, 255) or Color3.fromRGB(255, 180, 80)
+        local t = hum.RigType == Enum.HumanoidRigType.R15 and "R15" or "R6"
+        rigLabel.Text = "RIG: " .. t .. "  •  Enter any Bundle/Asset ID (supports long IDs):"
+        rigLabel.TextColor3 = t == "R15" and Color3.fromRGB(80,180,255) or Color3.fromRGB(255,180,80)
     else
-        rigLabel.Text = "ENTER BUNDLE ID OR ASSET ID:"
-        rigLabel.TextColor3 = Color3.fromRGB(120, 120, 150)
+        rigLabel.Text = "ENTER BUNDLE OR ASSET ID:"
+        rigLabel.TextColor3 = Color3.fromRGB(120,120,150)
     end
 end
-updateRigLabel()
+updateRig()
 player.CharacterAdded:Connect(function(ch)
-    ch:WaitForChild("Humanoid")
-    task.wait(0.5)
-    updateRigLabel()
+    ch:WaitForChild("Humanoid"); task.wait(0.5); updateRig()
 end)
 
--- TEXT BOX
-local textBox = Instance.new("TextBox", c)
-textBox.Size = UDim2.new(1, 0, 0, 38)
+-- TextBox (supports long IDs + URLs)
+local textBox = Instance.new("TextBox", ct)
+textBox.Size = UDim2.new(1, 0, 0, 40)
 textBox.Position = UDim2.new(0, 0, 0, 18)
-textBox.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+textBox.BackgroundColor3 = Color3.fromRGB(32, 32, 48)
 textBox.BorderSizePixel = 0
-textBox.PlaceholderText = "e.g. 193 (Headless) 154 (Korblox) 139607718"
-textBox.PlaceholderColor3 = Color3.fromRGB(85, 85, 110)
+textBox.PlaceholderText = "ID or URL — e.g. 192, 139607718, roblox.com/..."
+textBox.PlaceholderColor3 = Color3.fromRGB(80, 80, 110)
 textBox.Text = ""
-textBox.TextColor3 = Color3.new(1, 1, 1)
-textBox.TextSize = 15
+textBox.TextColor3 = Color3.new(1,1,1)
+textBox.TextSize = 14
 textBox.Font = Enum.Font.GothamBold
 textBox.ClearTextOnFocus = false
+textBox.TextTruncate = Enum.TextTruncate.None
+textBox.ClipDescendants = true
 Instance.new("UICorner", textBox).CornerRadius = UDim.new(0, 8)
-local tbPad = Instance.new("UIPadding", textBox)
-tbPad.PaddingLeft = UDim.new(0, 12)
-tbPad.PaddingRight = UDim.new(0, 12)
+local tbP = Instance.new("UIPadding", textBox)
+tbP.PaddingLeft = UDim.new(0, 10)
+tbP.PaddingRight = UDim.new(0, 10)
 Instance.new("UIStroke", textBox).Color = Color3.fromRGB(55, 55, 80)
 
--- ROW 1: Equip + Reset
-local equipBtn = Instance.new("TextButton", c)
-equipBtn.Size = UDim2.new(0.6, -3, 0, 38)
-equipBtn.Position = UDim2.new(0, 0, 0, 64)
-equipBtn.BackgroundColor3 = Color3.fromRGB(80, 40, 210)
+-- Row 1: Equip + Reset
+local equipBtn = Instance.new("TextButton", ct)
+equipBtn.Size = UDim2.new(0.6, -3, 0, 40)
+equipBtn.Position = UDim2.new(0, 0, 0, 66)
+equipBtn.BackgroundColor3 = Color3.fromRGB(85, 40, 220)
 equipBtn.BorderSizePixel = 0
 equipBtn.Text = "⚡ EQUIP"
-equipBtn.TextColor3 = Color3.new(1, 1, 1)
-equipBtn.TextSize = 15
+equipBtn.TextColor3 = Color3.new(1,1,1)
+equipBtn.TextSize = 16
 equipBtn.Font = Enum.Font.GothamBold
 Instance.new("UICorner", equipBtn).CornerRadius = UDim.new(0, 8)
 
-local resetBtn = Instance.new("TextButton", c)
-resetBtn.Size = UDim2.new(0.4, -3, 0, 38)
-resetBtn.Position = UDim2.new(0.6, 3, 0, 64)
+local resetBtn = Instance.new("TextButton", ct)
+resetBtn.Size = UDim2.new(0.4, -3, 0, 40)
+resetBtn.Position = UDim2.new(0.6, 3, 0, 66)
 resetBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
 resetBtn.BorderSizePixel = 0
 resetBtn.Text = "↺ Reset"
@@ -754,79 +773,77 @@ resetBtn.TextSize = 14
 resetBtn.Font = Enum.Font.GothamBold
 Instance.new("UICorner", resetBtn).CornerRadius = UDim.new(0, 8)
 
--- ROW 2: Keep clothes toggle
-local clothesToggle = Instance.new("TextButton", c)
-clothesToggle.Size = UDim2.new(1, 0, 0, 26)
-clothesToggle.Position = UDim2.new(0, 0, 0, 108)
-clothesToggle.BackgroundColor3 = Color3.fromRGB(30, 30, 42)
-clothesToggle.BorderSizePixel = 0
-clothesToggle.Text = "👕 Keep Clothes: OFF (full bundle apply)"
-clothesToggle.TextColor3 = Color3.fromRGB(150, 150, 175)
-clothesToggle.TextSize = 11
-clothesToggle.Font = Enum.Font.Gotham
-Instance.new("UICorner", clothesToggle).CornerRadius = UDim.new(0, 6)
+-- Row 2: Clothes toggle
+local clothToggle = Instance.new("TextButton", ct)
+clothToggle.Size = UDim2.new(1, 0, 0, 26)
+clothToggle.Position = UDim2.new(0, 0, 0, 112)
+clothToggle.BackgroundColor3 = Color3.fromRGB(28, 28, 40)
+clothToggle.BorderSizePixel = 0
+clothToggle.Text = "👕 Keep My Clothes: OFF (applies full bundle)"
+clothToggle.TextColor3 = Color3.fromRGB(140, 140, 170)
+clothToggle.TextSize = 11
+clothToggle.Font = Enum.Font.Gotham
+Instance.new("UICorner", clothToggle).CornerRadius = UDim.new(0, 6)
 
-clothesToggle.MouseButton1Click:Connect(function()
+clothToggle.MouseButton1Click:Connect(function()
     keepClothes = not keepClothes
-    if keepClothes then
-        clothesToggle.Text = "👕 Keep Clothes: ON (body only)"
-        clothesToggle.TextColor3 = Color3.fromRGB(80, 220, 120)
-    else
-        clothesToggle.Text = "👕 Keep Clothes: OFF (full bundle apply)"
-        clothesToggle.TextColor3 = Color3.fromRGB(150, 150, 175)
-    end
+    clothToggle.Text = keepClothes
+        and "👕 Keep My Clothes: ON (body mesh only)"
+        or "👕 Keep My Clothes: OFF (applies full bundle)"
+    clothToggle.TextColor3 = keepClothes
+        and Color3.fromRGB(80, 220, 120)
+        or Color3.fromRGB(140, 140, 170)
 end)
 
--- ROW 3: Quick presets label
-local preLabel = Instance.new("TextLabel", c)
-preLabel.Size = UDim2.new(1, 0, 0, 14)
-preLabel.Position = UDim2.new(0, 0, 0, 140)
-preLabel.BackgroundTransparency = 1
-preLabel.Text = "QUICK PRESETS:"
-preLabel.TextColor3 = Color3.fromRGB(120, 120, 150)
-preLabel.TextSize = 10
-preLabel.Font = Enum.Font.GothamBold
-preLabel.TextXAlignment = Enum.TextXAlignment.Left
+-- Presets label
+local pLabel = Instance.new("TextLabel", ct)
+pLabel.Size = UDim2.new(1, 0, 0, 14)
+pLabel.Position = UDim2.new(0, 0, 0, 144)
+pLabel.BackgroundTransparency = 1
+pLabel.Text = "QUICK PRESETS:"
+pLabel.TextColor3 = Color3.fromRGB(110, 110, 140)
+pLabel.TextSize = 10
+pLabel.Font = Enum.Font.GothamBold
+pLabel.TextXAlignment = Enum.TextXAlignment.Left
 
--- Quick button helper
-local function qBtn(text, pos, color)
-    local b = Instance.new("TextButton", c)
+local function qBtn(text, pos, col)
+    local b = Instance.new("TextButton", ct)
     b.Size = UDim2.new(0.333, -4, 0, 30)
     b.Position = pos
-    b.BackgroundColor3 = color
+    b.BackgroundColor3 = col
     b.BorderSizePixel = 0
     b.Text = text
-    b.TextColor3 = Color3.new(1, 1, 1)
+    b.TextColor3 = Color3.new(1,1,1)
     b.TextSize = 11
     b.Font = Enum.Font.GothamBold
     Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
     return b
 end
 
--- Row A presets
-local bHeadless = qBtn("💀 Headless", UDim2.new(0, 0, 0, 158), Color3.fromRGB(130, 20, 150))
-local bKorblox = qBtn("🦴 Korblox", UDim2.new(0.333, 2, 0, 158), Color3.fromRGB(25, 80, 150))
-local bSkeleton = qBtn("☠ Skeleton", UDim2.new(0.666, 4, 0, 158), Color3.fromRGB(100, 100, 20))
+-- Row A
+local bHeadless = qBtn("💀 Headless", UDim2.new(0,0,0,162), Color3.fromRGB(130,20,150))
+local bKorblox = qBtn("🦴 Korblox", UDim2.new(0.333,2,0,162), Color3.fromRGB(25,80,150))
+local bSkeleton = qBtn("☠ Skeleton", UDim2.new(0.666,4,0,162), Color3.fromRGB(100,100,20))
 
--- Row B presets
-local bKorLeg = qBtn("🦿 KorbLeg", UDim2.new(0, 0, 0, 192), Color3.fromRGB(25, 60, 120))
-local bRthro = qBtn("🧍 Man 2.0", UDim2.new(0.333, 2, 0, 192), Color3.fromRGB(40, 110, 50))
-local bSuperhero = qBtn("🦸 Superhero", UDim2.new(0.666, 4, 0, 192), Color3.fromRGB(150, 40, 30))
+-- Row B
+local bKorLeg = qBtn("🦿 KorbLeg", UDim2.new(0,0,0,196), Color3.fromRGB(20,55,120))
+local bRthro = qBtn("🧍 Man 2.0", UDim2.new(0.333,2,0,196), Color3.fromRGB(40,100,50))
+local bSuperhero = qBtn("🦸 Superhero", UDim2.new(0.666,4,0,196), Color3.fromRGB(150,40,30))
 
--- STATUS
-local statusFrame = Instance.new("Frame", c)
-statusFrame.Size = UDim2.new(1, 0, 0, 75)
-statusFrame.Position = UDim2.new(0, 0, 0, 230)
-statusFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
-statusFrame.BorderSizePixel = 0
-Instance.new("UICorner", statusFrame).CornerRadius = UDim.new(0, 8)
+-- Status
+local stFrame = Instance.new("Frame", ct)
+stFrame.Size = UDim2.new(1, 0, 0, 90)
+stFrame.Position = UDim2.new(0, 0, 0, 234)
+stFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+stFrame.BorderSizePixel = 0
+Instance.new("UICorner", stFrame).CornerRadius = UDim.new(0, 8)
 
-local statusLabel = Instance.new("TextLabel", statusFrame)
-statusLabel.Size = UDim2.new(1, -16, 1, -8)
-statusLabel.Position = UDim2.new(0, 8, 0, 4)
+local statusLabel = Instance.new("TextLabel", stFrame)
+statusLabel.Size = UDim2.new(1, -14, 1, -8)
+statusLabel.Position = UDim2.new(0, 7, 0, 4)
 statusLabel.BackgroundTransparency = 1
-statusLabel.Text = "Ready — Enter ID and press Equip\nSupports Bundle IDs + Asset IDs\nRightCtrl to toggle UI"
-statusLabel.TextColor3 = Color3.fromRGB(120, 120, 150)
+statusLabel.Text = "Ready — Enter any ID and click Equip\nAccepts Bundle IDs, Asset IDs, or catalog URLs\nLong IDs supported — RightCtrl to toggle"
+statusLabel.TextColor3 = Color3.fromRGB(110, 110, 145)
 statusLabel.TextSize = 11
 statusLabel.Font = Enum.Font.Gotham
 statusLabel.TextWrapped = true
@@ -835,89 +852,77 @@ statusLabel.TextYAlignment = Enum.TextYAlignment.Top
 gui.Parent = player:WaitForChild("PlayerGui")
 
 ---------------------------------------------------------------
--- STATUS HELPER
+-- LOGIC
 ---------------------------------------------------------------
-local isProcessing = false
+local busy = false
 
-local function log(text, color)
-    statusLabel.Text = text
-    statusLabel.TextColor3 = color or Color3.fromRGB(120, 120, 150)
+local function log(t, col)
+    statusLabel.Text = t
+    statusLabel.TextColor3 = col or Color3.fromRGB(110, 110, 145)
 end
 
----------------------------------------------------------------
--- EQUIP LOGIC
----------------------------------------------------------------
 local function runEquip(id)
-    if isProcessing then return end
-    isProcessing = true
+    if busy then return end
+    busy = true
     equipBtn.Text = "⏳ Working..."
     equipBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
 
-    local ok, nameOrErr, method = pcall(equipAny, id, log)
+    local ok, r1, r2 = pcall(equipAny, id, log)
     if ok then
-        log("✅ " .. tostring(nameOrErr) .. "\nMethod: " .. tostring(method), Color3.fromRGB(70, 255, 110))
+        log("✅ " .. tostring(r1) .. "\nMethod: " .. tostring(r2), Color3.fromRGB(70, 255, 110))
     else
-        log("❌ " .. tostring(nameOrErr), Color3.fromRGB(255, 60, 60))
+        log("❌ " .. tostring(r1), Color3.fromRGB(255, 55, 55))
     end
 
-    updateRigLabel()
+    updateRig()
     equipBtn.Text = "⚡ EQUIP"
-    equipBtn.BackgroundColor3 = Color3.fromRGB(80, 40, 210)
-    isProcessing = false
+    equipBtn.BackgroundColor3 = Color3.fromRGB(85, 40, 220)
+    busy = false
 end
 
----------------------------------------------------------------
--- CONNECTIONS
----------------------------------------------------------------
 equipBtn.MouseButton1Click:Connect(function()
-    local id = tonumber(textBox.Text:match("%d+"))
-    if not id then log("❌ Enter a valid ID!", Color3.fromRGB(255, 60, 60)) return end
+    local id = extractId(textBox.Text)
+    if not id then log("❌ Enter a valid ID!", Color3.fromRGB(255,55,55)) return end
     runEquip(id)
 end)
 
 textBox.FocusLost:Connect(function(enter)
-    if enter and not isProcessing then
-        local id = tonumber(textBox.Text:match("%d+"))
+    if enter and not busy then
+        local id = extractId(textBox.Text)
         if id then runEquip(id) end
     end
 end)
 
 resetBtn.MouseButton1Click:Connect(function()
-    if isProcessing then return end
-    isProcessing = true
+    if busy then return end
+    busy = true
     resetBtn.Text = "..."
-
-    local ok, err = pcall(doReset)
+    local ok = pcall(doReset)
     if ok then
         log("✅ Reset to original avatar", Color3.fromRGB(70, 255, 110))
     else
-        log("Reset failed, respawning... " .. tostring(err), Color3.fromRGB(255, 180, 50))
-        pcall(function()
-            player.Character:FindFirstChildOfClass("Humanoid").Health = 0
-        end)
+        log("Reset failed, respawning...", Color3.fromRGB(255, 180, 50))
+        pcall(function() player.Character:FindFirstChildOfClass("Humanoid").Health = 0 end)
     end
-
-    updateRigLabel()
+    updateRig()
     resetBtn.Text = "↺ Reset"
-    isProcessing = false
+    busy = false
 end)
 
 bHeadless.MouseButton1Click:Connect(function()
-    if isProcessing then return end
-    isProcessing = true
+    if busy then return end
+    busy = true
     local ok, err = pcall(doHeadless)
-    if ok then
-        log("✅ Headless applied!\nHead, face, and hair hidden", Color3.fromRGB(70, 255, 110))
-    else
-        log("❌ " .. tostring(err), Color3.fromRGB(255, 60, 60))
-    end
-    isProcessing = false
+    log(ok and "✅ Headless applied!" or ("❌ " .. tostring(err)),
+        ok and Color3.fromRGB(70,255,110) or Color3.fromRGB(255,55,55))
+    busy = false
 end)
 
+-- Presets (FIXED: Korblox = 192)
 local presets = {
-    {btn = bKorblox, id = 154},
+    {btn = bKorblox, id = 192},     -- Korblox Deathspeaker FULL
     {btn = bSkeleton, id = 174},
-    {btn = bKorLeg, id = 139607718},
+    {btn = bKorLeg, id = 139607718}, -- Korblox right leg asset
     {btn = bRthro, id = 228},
     {btn = bSuperhero, id = 229},
 }
@@ -938,4 +943,4 @@ UIS.InputBegan:Connect(function(input, gpe)
     end
 end)
 
-print("[BundleEquipper v4] Loaded! Executor: " .. execName)
+print("[BundleEquipper v5] Loaded! Executor: " .. execName)
