@@ -1,0 +1,1876 @@
+-- Mobile VFX Creator Suite
+-- LocalScript (StarterPlayerScripts)
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+local humanoid = character:WaitForChild("Humanoid")
+
+player.CharacterAdded:Connect(function(char)
+	character = char
+	humanoidRootPart = char:WaitForChild("HumanoidRootPart")
+	humanoid = char:WaitForChild("Humanoid")
+end)
+
+-------------------------------------------------
+-- SCREEN GUI SETUP
+-------------------------------------------------
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "MobileVFXCreator"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+-------------------------------------------------
+-- UTILITY FUNCTIONS
+-------------------------------------------------
+local function createCorner(parent, radius)
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, radius or 8)
+	corner.Parent = parent
+	return corner
+end
+
+local function createStroke(parent, color, thickness)
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = color or Color3.fromRGB(255, 255, 255)
+	stroke.Thickness = thickness or 1
+	stroke.Parent = parent
+	return stroke
+end
+
+local function createButton(parent, text, position, size, bgColor)
+	local btn = Instance.new("TextButton")
+	btn.Text = text
+	btn.Position = position
+	btn.Size = size or UDim2.new(0.9, 0, 0, 40)
+	btn.BackgroundColor3 = bgColor or Color3.fromRGB(50, 50, 70)
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 14
+	btn.TextScaled = false
+	btn.AutoButtonColor = true
+	btn.Parent = parent
+	createCorner(btn, 6)
+	createStroke(btn, Color3.fromRGB(100, 100, 140), 1)
+	return btn
+end
+
+local function createSlider(parent, labelText, position, minVal, maxVal, defaultVal, callback)
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.new(0.9, 0, 0, 55)
+	frame.Position = position
+	frame.BackgroundTransparency = 1
+	frame.Parent = parent
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, 0, 0, 18)
+	label.Position = UDim2.new(0, 0, 0, 0)
+	label.BackgroundTransparency = 1
+	label.Text = labelText .. ": " .. tostring(defaultVal)
+	label.TextColor3 = Color3.fromRGB(220, 220, 255)
+	label.Font = Enum.Font.Gotham
+	label.TextSize = 12
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = frame
+
+	local track = Instance.new("Frame")
+	track.Size = UDim2.new(1, 0, 0, 20)
+	track.Position = UDim2.new(0, 0, 0, 22)
+	track.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+	track.Parent = frame
+	createCorner(track, 10)
+	createStroke(track, Color3.fromRGB(80, 80, 120), 1)
+
+	local fill = Instance.new("Frame")
+	local pct = (defaultVal - minVal) / (maxVal - minVal)
+	fill.Size = UDim2.new(math.clamp(pct, 0, 1), 0, 1, 0)
+	fill.BackgroundColor3 = Color3.fromRGB(100, 130, 255)
+	fill.Parent = track
+	createCorner(fill, 10)
+
+	local knob = Instance.new("Frame")
+	knob.Size = UDim2.new(0, 24, 0, 24)
+	knob.Position = UDim2.new(math.clamp(pct, 0, 1), -12, 0.5, -12)
+	knob.BackgroundColor3 = Color3.fromRGB(200, 200, 255)
+	knob.ZIndex = 5
+	knob.Parent = track
+	createCorner(knob, 12)
+
+	local dragging = false
+	local currentValue = defaultVal
+
+	local function updateSlider(inputPos)
+		local trackAbsPos = track.AbsolutePosition.X
+		local trackAbsSize = track.AbsoluteSize.X
+		local relativeX = math.clamp((inputPos.X - trackAbsPos) / trackAbsSize, 0, 1)
+		fill.Size = UDim2.new(relativeX, 0, 1, 0)
+		knob.Position = UDim2.new(relativeX, -12, 0.5, -12)
+		currentValue = minVal + (maxVal - minVal) * relativeX
+		currentValue = math.floor(currentValue * 100) / 100
+		label.Text = labelText .. ": " .. tostring(currentValue)
+		if callback then callback(currentValue) end
+	end
+
+	track.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			updateSlider(input.Position)
+		end
+	end)
+
+	knob.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
+			updateSlider(input.Position)
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = false
+		end
+	end)
+
+	return frame, function() return currentValue end
+end
+
+local function createColorPicker(parent, labelText, position, defaultColor, callback)
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.new(0.9, 0, 0, 130)
+	frame.Position = position
+	frame.BackgroundTransparency = 1
+	frame.Parent = parent
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, 0, 0, 18)
+	label.BackgroundTransparency = 1
+	label.Text = labelText
+	label.TextColor3 = Color3.fromRGB(220, 220, 255)
+	label.Font = Enum.Font.GothamBold
+	label.TextSize = 13
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = frame
+
+	local preview = Instance.new("Frame")
+	preview.Size = UDim2.new(0, 30, 0, 30)
+	preview.Position = UDim2.new(0.85, 0, 0, 0)
+	preview.BackgroundColor3 = defaultColor
+	preview.Parent = frame
+	createCorner(preview, 6)
+	createStroke(preview, Color3.fromRGB(255, 255, 255), 2)
+
+	local r, g, b = defaultColor.R, defaultColor.G, defaultColor.B
+	local currentColor = defaultColor
+
+	local function updateColor()
+		currentColor = Color3.new(math.clamp(r, 0, 1), math.clamp(g, 0, 1), math.clamp(b, 0, 1))
+		preview.BackgroundColor3 = currentColor
+		if callback then callback(currentColor) end
+	end
+
+	local _, getR = createSlider(frame, "R", UDim2.new(0, 0, 0, 22), 0, 255, math.floor(r * 255), function(v) r = v / 255; updateColor() end)
+	local _, getG = createSlider(frame, "G", UDim2.new(0, 0, 0, 57), 0, 255, math.floor(g * 255), function(v) g = v / 255; updateColor() end)
+	local _, getB = createSlider(frame, "B", UDim2.new(0, 0, 0, 92), 0, 255, math.floor(b * 255), function(v) b = v / 255; updateColor() end)
+
+	return frame, function() return currentColor end
+end
+
+-------------------------------------------------
+-- MAIN TOGGLE BUTTON
+-------------------------------------------------
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 55, 0, 55)
+toggleBtn.Position = UDim2.new(0, 10, 0.4, 0)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(80, 50, 180)
+toggleBtn.Text = "VFX"
+toggleBtn.TextColor3 = Color3.new(1, 1, 1)
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 13
+toggleBtn.ZIndex = 100
+toggleBtn.Parent = screenGui
+createCorner(toggleBtn, 27)
+createStroke(toggleBtn, Color3.fromRGB(160, 120, 255), 2)
+
+-------------------------------------------------
+-- MAIN PANEL (SCROLLABLE)
+-------------------------------------------------
+local mainPanel = Instance.new("Frame")
+mainPanel.Size = UDim2.new(0, 320, 0.85, 0)
+mainPanel.Position = UDim2.new(0, 75, 0.075, 0)
+mainPanel.BackgroundColor3 = Color3.fromRGB(18, 18, 30)
+mainPanel.BackgroundTransparency = 0.05
+mainPanel.Visible = false
+mainPanel.ZIndex = 50
+mainPanel.Parent = screenGui
+createCorner(mainPanel, 12)
+createStroke(mainPanel, Color3.fromRGB(100, 80, 200), 2)
+
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 40)
+titleBar.BackgroundColor3 = Color3.fromRGB(40, 30, 80)
+titleBar.Parent = mainPanel
+createCorner(titleBar, 12)
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, 0, 1, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "⚡ Mobile VFX Creator ⚡"
+titleLabel.TextColor3 = Color3.fromRGB(200, 180, 255)
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextSize = 16
+titleLabel.Parent = titleBar
+
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Size = UDim2.new(1, -10, 1, -50)
+scrollFrame.Position = UDim2.new(0, 5, 0, 45)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.ScrollBarThickness = 6
+scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 80, 200)
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 3200)
+scrollFrame.Parent = mainPanel
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0, 8)
+listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+listLayout.Parent = scrollFrame
+
+local listPadding = Instance.new("UIPadding")
+listPadding.PadTop = UDim.new(0, 5)
+listPadding.PadBottom = UDim.new(0, 20)
+listPadding.Parent = scrollFrame
+
+-- Auto-resize canvas
+listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	scrollFrame.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 30)
+end)
+
+local panelOpen = false
+toggleBtn.MouseButton1Click:Connect(function()
+	panelOpen = not panelOpen
+	mainPanel.Visible = panelOpen
+end)
+
+-------------------------------------------------
+-- SECTION BUILDER
+-------------------------------------------------
+local function createSection(title)
+	local section = Instance.new("Frame")
+	section.Size = UDim2.new(0.95, 0, 0, 40)
+	section.BackgroundColor3 = Color3.fromRGB(35, 30, 60)
+	section.AutomaticSize = Enum.AutomaticSize.Y
+	section.ClipsDescendants = true
+	section.Parent = scrollFrame
+	createCorner(section, 8)
+	createStroke(section, Color3.fromRGB(80, 60, 150), 1)
+
+	local header = Instance.new("TextButton")
+	header.Size = UDim2.new(1, 0, 0, 40)
+	header.BackgroundTransparency = 1
+	header.Text = "▶ " .. title
+	header.TextColor3 = Color3.fromRGB(180, 160, 255)
+	header.Font = Enum.Font.GothamBold
+	header.TextSize = 14
+	header.Parent = section
+
+	local content = Instance.new("Frame")
+	content.Size = UDim2.new(1, 0, 0, 0)
+	content.Position = UDim2.new(0, 0, 0, 40)
+	content.BackgroundTransparency = 1
+	content.AutomaticSize = Enum.AutomaticSize.Y
+	content.Visible = false
+	content.Parent = section
+
+	local contentLayout = Instance.new("UIListLayout")
+	contentLayout.Padding = UDim.new(0, 6)
+	contentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	contentLayout.Parent = content
+
+	local contentPadding = Instance.new("UIPadding")
+	contentPadding.PadTop = UDim.new(0, 5)
+	contentPadding.PadBottom = UDim.new(0, 10)
+	contentPadding.Parent = content
+
+	local expanded = false
+	header.MouseButton1Click:Connect(function()
+		expanded = not expanded
+		content.Visible = expanded
+		header.Text = (expanded and "▼ " or "▶ ") .. title
+		if expanded then
+			section.AutomaticSize = Enum.AutomaticSize.Y
+		else
+			section.AutomaticSize = Enum.AutomaticSize.None
+			section.Size = UDim2.new(0.95, 0, 0, 40)
+		end
+	end)
+
+	return content
+end
+
+-------------------------------------------------
+-- ACTIVE EFFECTS STORAGE
+-------------------------------------------------
+local activeEffects = {}
+local activeConnections = {}
+local keyframes = {}
+local keyframePlayback = nil
+
+-------------------------------------------------
+-- 1. PARTICLE AURA SECTION
+-------------------------------------------------
+local auraSection = createSection("🔮 Particle Aura")
+
+local auraColor = Color3.fromRGB(100, 50, 255)
+local auraRate = 80
+local auraSpeed = 5
+local auraSize = 2
+local auraLifetime = 1.5
+local auraSpread = 360
+local auraShape = "Sphere"
+local auraTexture = "rbxassetid://241685484"
+local auraLightEmission = 1
+local auraTransparency = 0.3
+local auraGlow = true
+
+createColorPicker(auraSection, "Aura Color", UDim2.new(0, 0, 0, 0), auraColor, function(c) auraColor = c end)
+createSlider(auraSection, "Rate", UDim2.new(0, 0, 0, 0), 0, 500, auraRate, function(v) auraRate = math.floor(v) end)
+createSlider(auraSection, "Speed", UDim2.new(0, 0, 0, 0), 0, 50, auraSpeed, function(v) auraSpeed = v end)
+createSlider(auraSection, "Size", UDim2.new(0, 0, 0, 0), 0.1, 15, auraSize, function(v) auraSize = v end)
+createSlider(auraSection, "Lifetime", UDim2.new(0, 0, 0, 0), 0.1, 10, auraLifetime, function(v) auraLifetime = v end)
+createSlider(auraSection, "Spread Angle", UDim2.new(0, 0, 0, 0), 0, 360, auraSpread, function(v) auraSpread = math.floor(v) end)
+createSlider(auraSection, "Light Emission", UDim2.new(0, 0, 0, 0), 0, 1, auraLightEmission, function(v) auraLightEmission = v end)
+createSlider(auraSection, "Transparency", UDim2.new(0, 0, 0, 0), 0, 1, auraTransparency, function(v) auraTransparency = v end)
+
+-- Shape selector
+local shapeFrame = Instance.new("Frame")
+shapeFrame.Size = UDim2.new(0.9, 0, 0, 40)
+shapeFrame.BackgroundTransparency = 1
+shapeFrame.Parent = auraSection
+
+local shapeLabel = Instance.new("TextLabel")
+shapeLabel.Size = UDim2.new(0.4, 0, 1, 0)
+shapeLabel.BackgroundTransparency = 1
+shapeLabel.Text = "Shape:"
+shapeLabel.TextColor3 = Color3.fromRGB(220, 220, 255)
+shapeLabel.Font = Enum.Font.Gotham
+shapeLabel.TextSize = 12
+shapeLabel.TextXAlignment = Enum.TextXAlignment.Left
+shapeLabel.Parent = shapeFrame
+
+local shapes = {"Sphere", "Block", "Cylinder", "Disc"}
+local shapeBtnFrame = Instance.new("Frame")
+shapeBtnFrame.Size = UDim2.new(0.6, 0, 1, 0)
+shapeBtnFrame.Position = UDim2.new(0.4, 0, 0, 0)
+shapeBtnFrame.BackgroundTransparency = 1
+shapeBtnFrame.Parent = shapeFrame
+
+local shapeListLayout = Instance.new("UIListLayout")
+shapeListLayout.FillDirection = Enum.FillDirection.Horizontal
+shapeListLayout.Padding = UDim.new(0, 4)
+shapeListLayout.Parent = shapeBtnFrame
+
+for _, shapeName in ipairs(shapes) do
+	local sBtn = Instance.new("TextButton")
+	sBtn.Size = UDim2.new(0, 42, 0, 30)
+	sBtn.Text = shapeName:sub(1, 3)
+	sBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+	sBtn.TextColor3 = Color3.new(1, 1, 1)
+	sBtn.Font = Enum.Font.Gotham
+	sBtn.TextSize = 10
+	sBtn.Parent = shapeBtnFrame
+	createCorner(sBtn, 4)
+	sBtn.MouseButton1Click:Connect(function()
+		auraShape = shapeName
+		for _, child in pairs(shapeBtnFrame:GetChildren()) do
+			if child:IsA("TextButton") then
+				child.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+			end
+		end
+		sBtn.BackgroundColor3 = Color3.fromRGB(100, 80, 200)
+	end)
+end
+
+local applyAuraBtn = createButton(auraSection, "✨ Apply Aura", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(60, 40, 140))
+local removeAuraBtn = createButton(auraSection, "❌ Remove Aura", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(140, 40, 40))
+
+applyAuraBtn.MouseButton1Click:Connect(function()
+	-- Remove existing aura
+	if activeEffects["aura"] then
+		activeEffects["aura"]:Destroy()
+	end
+
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return end
+
+	local attachment = Instance.new("Attachment")
+	attachment.Name = "VFXAuraAttachment"
+	attachment.Parent = rootPart
+
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Color = ColorSequence.new(auraColor)
+	emitter.Rate = auraRate
+	emitter.Speed = NumberRange.new(auraSpeed * 0.5, auraSpeed)
+	emitter.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(0.3, auraSize),
+		NumberSequenceKeypoint.new(1, 0)
+	})
+	emitter.Lifetime = NumberRange.new(auraLifetime * 0.5, auraLifetime)
+	emitter.SpreadAngle = Vector2.new(auraSpread, auraSpread)
+	emitter.LightEmission = auraLightEmission
+	emitter.LightInfluence = 0
+	emitter.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, auraTransparency),
+		NumberSequenceKeypoint.new(0.7, auraTransparency),
+		NumberSequenceKeypoint.new(1, 1)
+	})
+	emitter.Texture = auraTexture
+	emitter.Shape = Enum.ParticleEmitterShape[auraShape] or Enum.ParticleEmitterShape.Sphere
+	emitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+	emitter.RotSpeed = NumberRange.new(-180, 180)
+	emitter.Rotation = NumberRange.new(0, 360)
+	emitter.Parent = attachment
+
+	activeEffects["aura"] = attachment
+end)
+
+removeAuraBtn.MouseButton1Click:Connect(function()
+	if activeEffects["aura"] then
+		activeEffects["aura"]:Destroy()
+		activeEffects["aura"] = nil
+	end
+end)
+
+-------------------------------------------------
+-- 2. TRAIL EFFECTS SECTION
+-------------------------------------------------
+local trailSection = createSection("🌊 Trail Effects")
+
+local trailColor1 = Color3.fromRGB(0, 200, 255)
+local trailColor2 = Color3.fromRGB(255, 0, 200)
+local trailLifetime = 0.8
+local trailWidth = 2
+local trailLightEmission = 1
+local trailTransparency = 0.2
+local trailTextureMode = "Stretch"
+
+createColorPicker(trailSection, "Trail Start Color", UDim2.new(0, 0, 0, 0), trailColor1, function(c) trailColor1 = c end)
+createColorPicker(trailSection, "Trail End Color", UDim2.new(0, 0, 0, 0), trailColor2, function(c) trailColor2 = c end)
+createSlider(trailSection, "Lifetime", UDim2.new(0, 0, 0, 0), 0.05, 5, trailLifetime, function(v) trailLifetime = v end)
+createSlider(trailSection, "Width", UDim2.new(0, 0, 0, 0), 0.1, 10, trailWidth, function(v) trailWidth = v end)
+createSlider(trailSection, "Light Emission", UDim2.new(0, 0, 0, 0), 0, 1, trailLightEmission, function(v) trailLightEmission = v end)
+createSlider(trailSection, "Transparency", UDim2.new(0, 0, 0, 0), 0, 1, trailTransparency, function(v) trailTransparency = v end)
+
+local applyTrailBtn = createButton(trailSection, "🌊 Apply Trail", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(0, 80, 140))
+local removeTrailBtn = createButton(trailSection, "❌ Remove Trail", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(140, 40, 40))
+
+applyTrailBtn.MouseButton1Click:Connect(function()
+	if activeEffects["trail"] then
+		for _, v in pairs(activeEffects["trail"]) do v:Destroy() end
+	end
+
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return end
+
+	local att0 = Instance.new("Attachment")
+	att0.Name = "VFXTrailAtt0"
+	att0.Position = Vector3.new(0, 1, 0)
+	att0.Parent = rootPart
+
+	local att1 = Instance.new("Attachment")
+	att1.Name = "VFXTrailAtt1"
+	att1.Position = Vector3.new(0, -1, 0)
+	att1.Parent = rootPart
+
+	local trail = Instance.new("Trail")
+	trail.Attachment0 = att0
+	trail.Attachment1 = att1
+	trail.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, trailColor1),
+		ColorSequenceKeypoint.new(1, trailColor2)
+	})
+	trail.Lifetime = trailLifetime
+	trail.MinLength = 0.05
+	trail.MaxWidth = trailWidth
+	trail.LightEmission = trailLightEmission
+	trail.LightInfluence = 0
+	trail.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, trailTransparency),
+		NumberSequenceKeypoint.new(1, 1)
+	})
+	trail.WidthScale = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(0.5, 0.8),
+		NumberSequenceKeypoint.new(1, 0)
+	})
+	trail.FaceCamera = true
+	trail.Parent = rootPart
+
+	activeEffects["trail"] = {att0, att1, trail}
+end)
+
+removeTrailBtn.MouseButton1Click:Connect(function()
+	if activeEffects["trail"] then
+		for _, v in pairs(activeEffects["trail"]) do v:Destroy() end
+		activeEffects["trail"] = nil
+	end
+end)
+
+-------------------------------------------------
+-- 3. BEAM / LASER EFFECTS
+-------------------------------------------------
+local beamSection = createSection("⚡ Beam / Laser")
+
+local beamColor = Color3.fromRGB(255, 50, 50)
+local beamWidth = 3
+local beamCurve = 5
+local beamSegments = 10
+local beamSpeed = 2
+local beamLength = 30
+
+createColorPicker(beamSection, "Beam Color", UDim2.new(0, 0, 0, 0), beamColor, function(c) beamColor = c end)
+createSlider(beamSection, "Width", UDim2.new(0, 0, 0, 0), 0.1, 15, beamWidth, function(v) beamWidth = v end)
+createSlider(beamSection, "Curve Size", UDim2.new(0, 0, 0, 0), 0, 20, beamCurve, function(v) beamCurve = v end)
+createSlider(beamSection, "Segments", UDim2.new(0, 0, 0, 0), 1, 50, beamSegments, function(v) beamSegments = math.floor(v) end)
+createSlider(beamSection, "Texture Speed", UDim2.new(0, 0, 0, 0), 0, 10, beamSpeed, function(v) beamSpeed = v end)
+createSlider(beamSection, "Length", UDim2.new(0, 0, 0, 0), 5, 100, beamLength, function(v) beamLength = v end)
+
+local applyBeamBtn = createButton(beamSection, "⚡ Fire Beam", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(140, 30, 30))
+local removeBeamBtn = createButton(beamSection, "❌ Remove Beam", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(140, 40, 40))
+
+applyBeamBtn.MouseButton1Click:Connect(function()
+	if activeEffects["beam"] then
+		for _, v in pairs(activeEffects["beam"]) do v:Destroy() end
+	end
+
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return end
+
+	local att0 = Instance.new("Attachment")
+	att0.Name = "VFXBeamAtt0"
+	att0.Parent = rootPart
+
+	local targetPart = Instance.new("Part")
+	targetPart.Size = Vector3.new(0.5, 0.5, 0.5)
+	targetPart.Transparency = 1
+	targetPart.CanCollide = false
+	targetPart.Anchored = true
+	targetPart.Name = "VFXBeamTarget"
+	targetPart.Parent = workspace
+
+	local att1 = Instance.new("Attachment")
+	att1.Parent = targetPart
+
+	local beam = Instance.new("Beam")
+	beam.Attachment0 = att0
+	beam.Attachment1 = att1
+	beam.Color = ColorSequence.new(beamColor)
+	beam.Width0 = beamWidth
+	beam.Width1 = beamWidth * 0.3
+	beam.CurveSize0 = beamCurve
+	beam.CurveSize1 = -beamCurve
+	beam.Segments = beamSegments
+	beam.TextureSpeed = beamSpeed
+	beam.LightEmission = 1
+	beam.LightInfluence = 0
+	beam.FaceCamera = true
+	beam.Texture = "rbxassetid://446111271"
+	beam.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(0.8, 0.2),
+		NumberSequenceKeypoint.new(1, 1)
+	})
+	beam.Parent = rootPart
+
+	-- Update target position
+	local conn = RunService.Heartbeat:Connect(function()
+		if rootPart and rootPart.Parent then
+			targetPart.Position = rootPart.Position + rootPart.CFrame.LookVector * beamLength
+		end
+	end)
+
+	activeEffects["beam"] = {att0, att1, targetPart, beam}
+	activeConnections["beam"] = conn
+end)
+
+removeBeamBtn.MouseButton1Click:Connect(function()
+	if activeEffects["beam"] then
+		for _, v in pairs(activeEffects["beam"]) do v:Destroy() end
+		activeEffects["beam"] = nil
+	end
+	if activeConnections["beam"] then
+		activeConnections["beam"]:Disconnect()
+		activeConnections["beam"] = nil
+	end
+end)
+
+-------------------------------------------------
+-- 4. BODY GLOW / HIGHLIGHT
+-------------------------------------------------
+local glowSection = createSection("💡 Body Glow / Highlight")
+
+local glowFillColor = Color3.fromRGB(100, 0, 255)
+local glowOutlineColor = Color3.fromRGB(255, 255, 255)
+local glowFillTransparency = 0.5
+local glowOutlineTransparency = 0
+local glowPulse = true
+local glowPulseSpeed = 2
+
+createColorPicker(glowSection, "Fill Color", UDim2.new(0, 0, 0, 0), glowFillColor, function(c) glowFillColor = c end)
+createColorPicker(glowSection, "Outline Color", UDim2.new(0, 0, 0, 0), glowOutlineColor, function(c) glowOutlineColor = c end)
+createSlider(glowSection, "Fill Transparency", UDim2.new(0, 0, 0, 0), 0, 1, glowFillTransparency, function(v) glowFillTransparency = v end)
+createSlider(glowSection, "Outline Transparency", UDim2.new(0, 0, 0, 0), 0, 1, glowOutlineTransparency, function(v) glowOutlineTransparency = v end)
+createSlider(glowSection, "Pulse Speed", UDim2.new(0, 0, 0, 0), 0, 10, glowPulseSpeed, function(v) glowPulseSpeed = v end)
+
+local togglePulseBtn = createButton(glowSection, "Pulse: ON", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 35), Color3.fromRGB(50, 80, 50))
+togglePulseBtn.MouseButton1Click:Connect(function()
+	glowPulse = not glowPulse
+	togglePulseBtn.Text = "Pulse: " .. (glowPulse and "ON" or "OFF")
+	togglePulseBtn.BackgroundColor3 = glowPulse and Color3.fromRGB(50, 80, 50) or Color3.fromRGB(80, 50, 50)
+end)
+
+local applyGlowBtn = createButton(glowSection, "💡 Apply Glow", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(80, 0, 160))
+local removeGlowBtn = createButton(glowSection, "❌ Remove Glow", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(140, 40, 40))
+
+applyGlowBtn.MouseButton1Click:Connect(function()
+	if activeEffects["glow"] then
+		activeEffects["glow"]:Destroy()
+	end
+	if activeConnections["glow"] then
+		activeConnections["glow"]:Disconnect()
+	end
+
+	local highlight = Instance.new("Highlight")
+	highlight.Name = "VFXGlow"
+	highlight.FillColor = glowFillColor
+	highlight.OutlineColor = glowOutlineColor
+	highlight.FillTransparency = glowFillTransparency
+	highlight.OutlineTransparency = glowOutlineTransparency
+	highlight.Adornee = character
+	highlight.Parent = character
+
+	activeEffects["glow"] = highlight
+
+	if glowPulse then
+		local conn = RunService.Heartbeat:Connect(function()
+			if highlight and highlight.Parent then
+				local pulse = (math.sin(tick() * glowPulseSpeed) + 1) / 2
+				highlight.FillTransparency = glowFillTransparency + (1 - glowFillTransparency) * pulse * 0.5
+			end
+		end)
+		activeConnections["glow"] = conn
+	end
+end)
+
+removeGlowBtn.MouseButton1Click:Connect(function()
+	if activeEffects["glow"] then
+		activeEffects["glow"]:Destroy()
+		activeEffects["glow"] = nil
+	end
+	if activeConnections["glow"] then
+		activeConnections["glow"]:Disconnect()
+		activeConnections["glow"] = nil
+	end
+end)
+
+-------------------------------------------------
+-- 5. POINT LIGHT / EFFECTS LIGHTING
+-------------------------------------------------
+local lightSection = createSection("🔦 Point Light")
+
+local lightColor = Color3.fromRGB(255, 200, 100)
+local lightBrightness = 3
+local lightRange = 30
+
+createColorPicker(lightSection, "Light Color", UDim2.new(0, 0, 0, 0), lightColor, function(c) lightColor = c end)
+createSlider(lightSection, "Brightness", UDim2.new(0, 0, 0, 0), 0, 10, lightBrightness, function(v) lightBrightness = v end)
+createSlider(lightSection, "Range", UDim2.new(0, 0, 0, 0), 1, 60, lightRange, function(v) lightRange = v end)
+
+local applyLightBtn = createButton(lightSection, "🔦 Apply Light", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(120, 100, 30))
+local removeLightBtn = createButton(lightSection, "❌ Remove Light", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(140, 40, 40))
+
+applyLightBtn.MouseButton1Click:Connect(function()
+	if activeEffects["light"] then
+		activeEffects["light"]:Destroy()
+	end
+
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return end
+
+	local pointLight = Instance.new("PointLight")
+	pointLight.Name = "VFXLight"
+	pointLight.Color = lightColor
+	pointLight.Brightness = lightBrightness
+	pointLight.Range = lightRange
+	pointLight.Parent = rootPart
+
+	activeEffects["light"] = pointLight
+end)
+
+removeLightBtn.MouseButton1Click:Connect(function()
+	if activeEffects["light"] then
+		activeEffects["light"]:Destroy()
+		activeEffects["light"] = nil
+	end
+end)
+
+-------------------------------------------------
+-- 6. SCREEN EFFECTS / POST PROCESSING
+-------------------------------------------------
+local screenFXSection = createSection("🎨 Screen Effects")
+
+local bloomIntensity = 1.5
+local bloomSize = 40
+local bloomThreshold = 0.8
+local blurSize = 0
+local colorCorrectionSat = 1.2
+local colorCorrectionContrast = 0.1
+local colorCorrectionBrightness = 0.05
+local ccTintColor = Color3.fromRGB(255, 255, 255)
+local sunRaysIntensity = 0.1
+local sunRaysSpread = 0.5
+local depthOfFieldFar = 200
+local depthOfFieldNear = 0
+local depthOfFieldFocus = 50
+
+createSlider(screenFXSection, "Bloom Intensity", UDim2.new(0, 0, 0, 0), 0, 5, bloomIntensity, function(v) bloomIntensity = v end)
+createSlider(screenFXSection, "Bloom Size", UDim2.new(0, 0, 0, 0), 0, 100, bloomSize, function(v) bloomSize = v end)
+createSlider(screenFXSection, "Bloom Threshold", UDim2.new(0, 0, 0, 0), 0, 2, bloomThreshold, function(v) bloomThreshold = v end)
+createSlider(screenFXSection, "Blur", UDim2.new(0, 0, 0, 0), 0, 56, blurSize, function(v) blurSize = v end)
+createSlider(screenFXSection, "Saturation", UDim2.new(0, 0, 0, 0), -1, 3, colorCorrectionSat, function(v) colorCorrectionSat = v end)
+createSlider(screenFXSection, "Contrast", UDim2.new(0, 0, 0, 0), -1, 1, colorCorrectionContrast, function(v) colorCorrectionContrast = v end)
+createSlider(screenFXSection, "Brightness", UDim2.new(0, 0, 0, 0), -1, 1, colorCorrectionBrightness, function(v) colorCorrectionBrightness = v end)
+createColorPicker(screenFXSection, "Tint Color", UDim2.new(0, 0, 0, 0), ccTintColor, function(c) ccTintColor = c end)
+createSlider(screenFXSection, "Sun Rays Intensity", UDim2.new(0, 0, 0, 0), 0, 1, sunRaysIntensity, function(v) sunRaysIntensity = v end)
+createSlider(screenFXSection, "DOF Focus Dist", UDim2.new(0, 0, 0, 0), 0, 500, depthOfFieldFocus, function(v) depthOfFieldFocus = v end)
+
+local applyScreenFXBtn = createButton(screenFXSection, "🎨 Apply Screen FX", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(60, 100, 60))
+local removeScreenFXBtn = createButton(screenFXSection, "❌ Remove Screen FX", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(140, 40, 40))
+
+applyScreenFXBtn.MouseButton1Click:Connect(function()
+	-- Remove existing
+	for _, child in pairs(Lighting:GetChildren()) do
+		if child.Name:sub(1, 3) == "VFX" then
+			child:Destroy()
+		end
+	end
+
+	local bloom = Instance.new("BloomEffect")
+	bloom.Name = "VFXBloom"
+	bloom.Intensity = bloomIntensity
+	bloom.Size = bloomSize
+	bloom.Threshold = bloomThreshold
+	bloom.Parent = Lighting
+
+	if blurSize > 0 then
+		local blur = Instance.new("BlurEffect")
+		blur.Name = "VFXBlur"
+		blur.Size = blurSize
+		blur.Parent = Lighting
+	end
+
+	local cc = Instance.new("ColorCorrectionEffect")
+	cc.Name = "VFXColorCorrection"
+	cc.Saturation = colorCorrectionSat
+	cc.Contrast = colorCorrectionContrast
+	cc.Brightness = colorCorrectionBrightness
+	cc.TintColor = ccTintColor
+	cc.Parent = Lighting
+
+	if sunRaysIntensity > 0 then
+		local rays = Instance.new("SunRaysEffect")
+		rays.Name = "VFXSunRays"
+		rays.Intensity = sunRaysIntensity
+		rays.Spread = sunRaysSpread
+		rays.Parent = Lighting
+	end
+
+	if depthOfFieldFocus > 0 then
+		local dof = Instance.new("DepthOfFieldEffect")
+		dof.Name = "VFXDepthOfField"
+		dof.FarIntensity = 0.5
+		dof.FocusDistance = depthOfFieldFocus
+		dof.InFocusRadius = 30
+		dof.NearIntensity = 0.5
+		dof.Parent = Lighting
+	end
+end)
+
+removeScreenFXBtn.MouseButton1Click:Connect(function()
+	for _, child in pairs(Lighting:GetChildren()) do
+		if child.Name:sub(1, 3) == "VFX" then
+			child:Destroy()
+		end
+	end
+end)
+
+-------------------------------------------------
+-- 7. SPEED / WALKSPEED CHANGER
+-------------------------------------------------
+local speedSection = createSection("🏃 Speed Changer")
+
+local walkSpeedVal = 16
+local jumpPowerVal = 50
+
+createSlider(speedSection, "Walk Speed", UDim2.new(0, 0, 0, 0), 0, 200, walkSpeedVal, function(v) walkSpeedVal = v end)
+createSlider(speedSection, "Jump Power", UDim2.new(0, 0, 0, 0), 0, 300, jumpPowerVal, function(v) jumpPowerVal = v end)
+
+local applySpeedBtn = createButton(speedSection, "🏃 Apply Speed", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(30, 100, 30))
+local resetSpeedBtn = createButton(speedSection, "↩️ Reset to Default", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(100, 100, 30))
+
+applySpeedBtn.MouseButton1Click:Connect(function()
+	local hum = character:FindFirstChild("Humanoid")
+	if hum then
+		hum.WalkSpeed = walkSpeedVal
+		hum.JumpPower = jumpPowerVal
+	end
+end)
+
+resetSpeedBtn.MouseButton1Click:Connect(function()
+	local hum = character:FindFirstChild("Humanoid")
+	if hum then
+		hum.WalkSpeed = 16
+		hum.JumpPower = 50
+	end
+end)
+
+-------------------------------------------------
+-- 8. FORCEFIELD / SHIELD
+-------------------------------------------------
+local shieldSection = createSection("🛡️ Shield / Forcefield")
+
+local shieldColor = Color3.fromRGB(0, 150, 255)
+local shieldTransparency = 0.5
+local shieldSize = 8
+local shieldRotationSpeed = 2
+local shieldMaterial = "ForceField"
+
+createColorPicker(shieldSection, "Shield Color", UDim2.new(0, 0, 0, 0), shieldColor, function(c) shieldColor = c end)
+createSlider(shieldSection, "Transparency", UDim2.new(0, 0, 0, 0), 0, 0.95, shieldTransparency, function(v) shieldTransparency = v end)
+createSlider(shieldSection, "Size", UDim2.new(0, 0, 0, 0), 3, 25, shieldSize, function(v) shieldSize = v end)
+createSlider(shieldSection, "Rotation Speed", UDim2.new(0, 0, 0, 0), 0, 10, shieldRotationSpeed, function(v) shieldRotationSpeed = v end)
+
+local applyShieldBtn = createButton(shieldSection, "🛡️ Create Shield", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(0, 80, 140))
+local removeShieldBtn = createButton(shieldSection, "❌ Remove Shield", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(140, 40, 40))
+
+applyShieldBtn.MouseButton1Click:Connect(function()
+	if activeEffects["shield"] then
+		activeEffects["shield"]:Destroy()
+	end
+	if activeConnections["shield"] then
+		activeConnections["shield"]:Disconnect()
+	end
+
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return end
+
+	local sphere = Instance.new("Part")
+	sphere.Name = "VFXShield"
+	sphere.Shape = Enum.PartType.Ball
+	sphere.Size = Vector3.new(shieldSize, shieldSize, shieldSize)
+	sphere.Color = shieldColor
+	sphere.Material = Enum.Material.ForceField
+	sphere.Transparency = shieldTransparency
+	sphere.CanCollide = false
+	sphere.Anchored = true
+	sphere.CastShadow = false
+	sphere.Parent = workspace
+
+	local angle = 0
+	local conn = RunService.Heartbeat:Connect(function(dt)
+		if rootPart and rootPart.Parent and sphere and sphere.Parent then
+			angle = angle + dt * shieldRotationSpeed
+			sphere.CFrame = CFrame.new(rootPart.Position) * CFrame.Angles(0, angle, angle * 0.3)
+			sphere.Size = Vector3.new(shieldSize, shieldSize, shieldSize)
+			sphere.Color = shieldColor
+			sphere.Transparency = shieldTransparency
+		end
+	end)
+
+	activeEffects["shield"] = sphere
+	activeConnections["shield"] = conn
+end)
+
+removeShieldBtn.MouseButton1Click:Connect(function()
+	if activeEffects["shield"] then
+		activeEffects["shield"]:Destroy()
+		activeEffects["shield"] = nil
+	end
+	if activeConnections["shield"] then
+		activeConnections["shield"]:Disconnect()
+		activeConnections["shield"] = nil
+	end
+end)
+
+-------------------------------------------------
+-- 9. RING BURST / SHOCKWAVE
+-------------------------------------------------
+local ringSection = createSection("💫 Ring Burst / Shockwave")
+
+local ringColor = Color3.fromRGB(255, 200, 0)
+local ringExpandSpeed = 1
+local ringMaxSize = 40
+local ringThickness = 0.3
+local ringCount = 3
+
+createColorPicker(ringSection, "Ring Color", UDim2.new(0, 0, 0, 0), ringColor, function(c) ringColor = c end)
+createSlider(ringSection, "Expand Speed", UDim2.new(0, 0, 0, 0), 0.2, 5, ringExpandSpeed, function(v) ringExpandSpeed = v end)
+createSlider(ringSection, "Max Size", UDim2.new(0, 0, 0, 0), 5, 100, ringMaxSize, function(v) ringMaxSize = v end)
+createSlider(ringSection, "Ring Count", UDim2.new(0, 0, 0, 0), 1, 10, ringCount, function(v) ringCount = math.floor(v) end)
+
+local fireRingBtn = createButton(ringSection, "💫 Fire Shockwave!", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(140, 120, 0))
+
+fireRingBtn.MouseButton1Click:Connect(function()
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return end
+
+	for i = 1, ringCount do
+		task.delay((i - 1) * 0.15, function()
+			local ring = Instance.new("Part")
+			ring.Name = "VFXRing"
+			ring.Shape = Enum.PartType.Cylinder
+			ring.Size = Vector3.new(ringThickness, 1, 1)
+			ring.CFrame = CFrame.new(rootPart.Position) * CFrame.Angles(0, 0, math.rad(90))
+			ring.Color = ringColor
+			ring.Material = Enum.Material.Neon
+			ring.Transparency = 0
+			ring.CanCollide = false
+			ring.Anchored = true
+			ring.CastShadow = false
+			ring.Parent = workspace
+
+			local startPos = rootPart.Position
+			local startTime = tick()
+
+			local conn
+			conn = RunService.Heartbeat:Connect(function()
+				local elapsed = (tick() - startTime) * (1 / ringExpandSpeed)
+				local progress = math.min(elapsed, 1)
+
+				local currentSize = 1 + progress * ringMaxSize
+				ring.Size = Vector3.new(ringThickness, currentSize, currentSize)
+				ring.CFrame = CFrame.new(startPos) * CFrame.Angles(0, 0, math.rad(90))
+				ring.Transparency = progress
+
+				if progress >= 1 then
+					conn:Disconnect()
+					ring:Destroy()
+				end
+			end)
+		end)
+	end
+end)
+
+-------------------------------------------------
+-- 10. FLOATING ORBS
+-------------------------------------------------
+local orbSection = createSection("🌀 Floating Orbs")
+
+local orbColor = Color3.fromRGB(0, 255, 150)
+local orbCount = 5
+local orbSize = 0.8
+local orbRadius = 5
+local orbSpeed = 2
+local orbGlow = true
+
+createColorPicker(orbSection, "Orb Color", UDim2.new(0, 0, 0, 0), orbColor, function(c) orbColor = c end)
+createSlider(orbSection, "Orb Count", UDim2.new(0, 0, 0, 0), 1, 20, orbCount, function(v) orbCount = math.floor(v) end)
+createSlider(orbSection, "Orb Size", UDim2.new(0, 0, 0, 0), 0.2, 5, orbSize, function(v) orbSize = v end)
+createSlider(orbSection, "Orbit Radius", UDim2.new(0, 0, 0, 0), 1, 20, orbRadius, function(v) orbRadius = v end)
+createSlider(orbSection, "Orbit Speed", UDim2.new(0, 0, 0, 0), 0.1, 10, orbSpeed, function(v) orbSpeed = v end)
+
+local applyOrbBtn = createButton(orbSection, "🌀 Spawn Orbs", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(0, 100, 70))
+local removeOrbBtn = createButton(orbSection, "❌ Remove Orbs", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(140, 40, 40))
+
+applyOrbBtn.MouseButton1Click:Connect(function()
+	-- Remove existing
+	if activeEffects["orbs"] then
+		for _, v in pairs(activeEffects["orbs"]) do v:Destroy() end
+	end
+	if activeConnections["orbs"] then
+		activeConnections["orbs"]:Disconnect()
+	end
+
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return end
+
+	local orbs = {}
+	for i = 1, orbCount do
+		local orb = Instance.new("Part")
+		orb.Name = "VFXOrb"
+		orb.Shape = Enum.PartType.Ball
+		orb.Size = Vector3.new(orbSize, orbSize, orbSize)
+		orb.Color = orbColor
+		orb.Material = Enum.Material.Neon
+		orb.CanCollide = false
+		orb.Anchored = true
+		orb.CastShadow = false
+		orb.Parent = workspace
+
+		if orbGlow then
+			local pl = Instance.new("PointLight")
+			pl.Color = orbColor
+			pl.Brightness = 2
+			pl.Range = 8
+			pl.Parent = orb
+		end
+
+		-- Add particle trail to each orb
+		local att = Instance.new("Attachment")
+		att.Parent = orb
+		local pe = Instance.new("ParticleEmitter")
+		pe.Color = ColorSequence.new(orbColor)
+		pe.Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, orbSize * 0.5),
+			NumberSequenceKeypoint.new(1, 0)
+		})
+		pe.Rate = 20
+		pe.Lifetime = NumberRange.new(0.3, 0.6)
+		pe.Speed = NumberRange.new(0, 0.5)
+		pe.LightEmission = 1
+		pe.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.3),
+			NumberSequenceKeypoint.new(1, 1)
+		})
+		pe.Texture = "rbxassetid://241685484"
+		pe.Parent = att
+
+		table.insert(orbs, orb)
+	end
+
+	local conn = RunService.Heartbeat:Connect(function()
+		if rootPart and rootPart.Parent then
+			for i, orb in ipairs(orbs) do
+				if orb and orb.Parent then
+					local angle = tick() * orbSpeed + (i - 1) * (math.pi * 2 / #orbs)
+					local heightOffset = math.sin(tick() * 1.5 + i) * 1.5
+					local x = math.cos(angle) * orbRadius
+					local z = math.sin(angle) * orbRadius
+					orb.Position = rootPart.Position + Vector3.new(x, heightOffset, z)
+					orb.Color = orbColor
+					orb.Size = Vector3.new(orbSize, orbSize, orbSize)
+				end
+			end
+		end
+	end)
+
+	activeEffects["orbs"] = orbs
+	activeConnections["orbs"] = conn
+end)
+
+removeOrbBtn.MouseButton1Click:Connect(function()
+	if activeEffects["orbs"] then
+		for _, v in pairs(activeEffects["orbs"]) do v:Destroy() end
+		activeEffects["orbs"] = nil
+	end
+	if activeConnections["orbs"] then
+		activeConnections["orbs"]:Disconnect()
+		activeConnections["orbs"] = nil
+	end
+end)
+
+-------------------------------------------------
+-- 11. FIRE / SMOKE EFFECTS
+-------------------------------------------------
+local fireSection = createSection("🔥 Fire & Smoke")
+
+local fireColor = Color3.fromRGB(255, 100, 0)
+local fireSecondaryColor = Color3.fromRGB(255, 200, 0)
+local fireSize = 5
+local fireHeat = 15
+local smokeOpacity = 0.3
+local smokeRiseVel = 8
+local smokeSize = 5
+
+createColorPicker(fireSection, "Fire Color", UDim2.new(0, 0, 0, 0), fireColor, function(c) fireColor = c end)
+createColorPicker(fireSection, "Secondary Color", UDim2.new(0, 0, 0, 0), fireSecondaryColor, function(c) fireSecondaryColor = c end)
+createSlider(fireSection, "Fire Size", UDim2.new(0, 0, 0, 0), 1, 30, fireSize, function(v) fireSize = v end)
+createSlider(fireSection, "Heat", UDim2.new(0, 0, 0, 0), 1, 50, fireHeat, function(v) fireHeat = v end)
+createSlider(fireSection, "Smoke Opacity", UDim2.new(0, 0, 0, 0), 0, 1, smokeOpacity, function(v) smokeOpacity = v end)
+createSlider(fireSection, "Smoke Rise", UDim2.new(0, 0, 0, 0), 0, 25, smokeRiseVel, function(v) smokeRiseVel = v end)
+
+local applyFireBtn = createButton(fireSection, "🔥 Apply Fire", UDim2.new(0, 0, 0, 0), UDim2.new(0.44, 0, 0, 40), Color3.fromRGB(140, 60, 0))
+local applySmokeBtn = createButton(fireSection, "💨 Apply Smoke", UDim2.new(0, 0, 0, 0), UDim2.new(0.44, 0, 0, 40), Color3.fromRGB(80, 80, 80))
+local removeFireBtn = createButton(fireSection, "❌ Remove Fire & Smoke", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(140, 40, 40))
+
+applyFireBtn.MouseButton1Click:Connect(function()
+	if activeEffects["fire"] then activeEffects["fire"]:Destroy() end
+
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return end
+
+	local fire = Instance.new("Fire")
+	fire.Name = "VFXFire"
+	fire.Color = fireColor
+	fire.SecondaryColor = fireSecondaryColor
+	fire.Size = fireSize
+	fire.Heat = fireHeat
+	fire.Parent = rootPart
+
+	activeEffects["fire"] = fire
+end)
+
+applySmokeBtn.MouseButton1Click:Connect(function()
+	if activeEffects["smoke"] then activeEffects["smoke"]:Destroy() end
+
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return end
+
+	local smoke = Instance.new("Smoke")
+	smoke.Name = "VFXSmoke"
+	smoke.Color = Color3.fromRGB(100, 100, 100)
+	smoke.Opacity = smokeOpacity
+	smoke.RiseVelocity = smokeRiseVel
+	smoke.Size = smokeSize
+	smoke.Parent = rootPart
+
+	activeEffects["smoke"] = smoke
+end)
+
+removeFireBtn.MouseButton1Click:Connect(function()
+	if activeEffects["fire"] then activeEffects["fire"]:Destroy(); activeEffects["fire"] = nil end
+	if activeEffects["smoke"] then activeEffects["smoke"]:Destroy(); activeEffects["smoke"] = nil end
+end)
+
+-------------------------------------------------
+-- 12. WINGS EFFECT
+-------------------------------------------------
+local wingsSection = createSection("🦋 Wings")
+
+local wingColor = Color3.fromRGB(200, 100, 255)
+local wingSize = 6
+local wingTransparency = 0.3
+local wingFlap = true
+local wingFlapSpeed = 3
+
+createColorPicker(wingsSection, "Wing Color", UDim2.new(0, 0, 0, 0), wingColor, function(c) wingColor = c end)
+createSlider(wingsSection, "Wing Size", UDim2.new(0, 0, 0, 0), 2, 15, wingSize, function(v) wingSize = v end)
+createSlider(wingsSection, "Transparency", UDim2.new(0, 0, 0, 0), 0, 0.9, wingTransparency, function(v) wingTransparency = v end)
+createSlider(wingsSection, "Flap Speed", UDim2.new(0, 0, 0, 0), 0, 10, wingFlapSpeed, function(v) wingFlapSpeed = v end)
+
+local applyWingsBtn = createButton(wingsSection, "🦋 Apply Wings", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(120, 50, 160))
+local removeWingsBtn = createButton(wingsSection, "❌ Remove Wings", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(140, 40, 40))
+
+applyWingsBtn.MouseButton1Click:Connect(function()
+	if activeEffects["wings"] then
+		for _, v in pairs(activeEffects["wings"]) do v:Destroy() end
+	end
+	if activeConnections["wings"] then
+		activeConnections["wings"]:Disconnect()
+	end
+
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	local upperTorso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
+	if not upperTorso then upperTorso = rootPart end
+	if not upperTorso then return end
+
+	local wingL = Instance.new("Part")
+	wingL.Name = "VFXWingL"
+	wingL.Size = Vector3.new(wingSize, wingSize * 1.2, 0.2)
+	wingL.Color = wingColor
+	wingL.Material = Enum.Material.Neon
+	wingL.Transparency = wingTransparency
+	wingL.CanCollide = false
+	wingL.Anchored = true
+	wingL.CastShadow = false
+	wingL.Parent = workspace
+
+	local wingR = Instance.new("Part")
+	wingR.Name = "VFXWingR"
+	wingR.Size = Vector3.new(wingSize, wingSize * 1.2, 0.2)
+	wingR.Color = wingColor
+	wingR.Material = Enum.Material.Neon
+	wingR.Transparency = wingTransparency
+	wingR.CanCollide = false
+	wingR.Anchored = true
+	wingR.CastShadow = false
+	wingR.Parent = workspace
+
+	-- Add particle emitters to wings
+	for _, wing in ipairs({wingL, wingR}) do
+		local att = Instance.new("Attachment")
+		att.Parent = wing
+		local pe = Instance.new("ParticleEmitter")
+		pe.Color = ColorSequence.new(wingColor)
+		pe.Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.5),
+			NumberSequenceKeypoint.new(1, 0)
+		})
+		pe.Rate = 30
+		pe.Lifetime = NumberRange.new(0.5, 1)
+		pe.Speed = NumberRange.new(0.5, 1)
+		pe.SpreadAngle = Vector2.new(30, 30)
+		pe.LightEmission = 1
+		pe.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.3),
+			NumberSequenceKeypoint.new(1, 1)
+		})
+		pe.Texture = "rbxassetid://241685484"
+		pe.Parent = att
+	end
+
+	local conn = RunService.Heartbeat:Connect(function()
+		if upperTorso and upperTorso.Parent then
+			local cf = upperTorso.CFrame
+			local flapAngle = math.sin(tick() * wingFlapSpeed) * math.rad(25)
+
+			wingL.Size = Vector3.new(wingSize, wingSize * 1.2, 0.2)
+			wingR.Size = Vector3.new(wingSize, wingSize * 1.2, 0.2)
+			wingL.Color = wingColor
+			wingR.Color = wingColor
+			wingL.Transparency = wingTransparency
+			wingR.Transparency = wingTransparency
+
+			local leftOffset = cf * CFrame.new(-wingSize * 0.6, 0.5, 0.5) * CFrame.Angles(0, flapAngle, math.rad(-10))
+			local rightOffset = cf * CFrame.new(wingSize * 0.6, 0.5, 0.5) * CFrame.Angles(0, -flapAngle, math.rad(10))
+
+			wingL.CFrame = leftOffset
+			wingR.CFrame = rightOffset
+		end
+	end)
+
+	activeEffects["wings"] = {wingL, wingR}
+	activeConnections["wings"] = conn
+end)
+
+removeWingsBtn.MouseButton1Click:Connect(function()
+	if activeEffects["wings"] then
+		for _, v in pairs(activeEffects["wings"]) do v:Destroy() end
+		activeEffects["wings"] = nil
+	end
+	if activeConnections["wings"] then
+		activeConnections["wings"]:Disconnect()
+		activeConnections["wings"] = nil
+	end
+end)
+
+-------------------------------------------------
+-- 13. GROUND CRACK / IMPACT
+-------------------------------------------------
+local impactSection = createSection("💥 Ground Impact")
+
+local impactColor = Color3.fromRGB(255, 80, 0)
+local impactSize = 15
+local impactDuration = 2
+local impactRays = 8
+
+createColorPicker(impactSection, "Impact Color", UDim2.new(0, 0, 0, 0), impactColor, function(c) impactColor = c end)
+createSlider(impactSection, "Size", UDim2.new(0, 0, 0, 0), 3, 50, impactSize, function(v) impactSize = v end)
+createSlider(impactSection, "Duration", UDim2.new(0, 0, 0, 0), 0.5, 5, impactDuration, function(v) impactDuration = v end)
+createSlider(impactSection, "Ray Count", UDim2.new(0, 0, 0, 0), 3, 20, impactRays, function(v) impactRays = math.floor(v) end)
+
+local fireImpactBtn = createButton(impactSection, "💥 Ground Slam!", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(160, 60, 0))
+
+fireImpactBtn.MouseButton1Click:Connect(function()
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return end
+
+	local basePos = rootPart.Position - Vector3.new(0, 3, 0)
+
+	-- Central flash
+	local flash = Instance.new("Part")
+	flash.Shape = Enum.PartType.Cylinder
+	flash.Size = Vector3.new(0.3, 1, 1)
+	flash.CFrame = CFrame.new(basePos) * CFrame.Angles(0, 0, math.rad(90))
+	flash.Color = impactColor
+	flash.Material = Enum.Material.Neon
+	flash.CanCollide = false
+	flash.Anchored = true
+	flash.Parent = workspace
+
+	TweenService:Create(flash, TweenInfo.new(impactDuration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Size = Vector3.new(0.3, impactSize, impactSize),
+		Transparency = 1
+	}):Play()
+
+	task.delay(impactDuration, function()
+		flash:Destroy()
+	end)
+
+	-- Rays
+	for i = 1, impactRays do
+		local angle = (i / impactRays) * math.pi * 2
+		local ray = Instance.new("Part")
+		ray.Size = Vector3.new(0.4, 0.2, 1)
+		ray.CFrame = CFrame.new(basePos) * CFrame.Angles(0, angle, 0)
+		ray.Color = impactColor
+		ray.Material = Enum.Material.Neon
+		ray.CanCollide = false
+		ray.Anchored = true
+		ray.Parent = workspace
+
+		local targetSize = Vector3.new(0.4, 0.2, impactSize * 0.8)
+		local targetCF = CFrame.new(basePos + Vector3.new(math.cos(angle) * impactSize * 0.4, 0, math.sin(angle) * impactSize * 0.4)) * CFrame.Angles(0, angle, 0)
+
+		TweenService:Create(ray, TweenInfo.new(impactDuration * 0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Size = targetSize,
+			CFrame = targetCF,
+			Transparency = 1
+		}):Play()
+
+		task.delay(impactDuration, function()
+			ray:Destroy()
+		end)
+	end
+
+	-- Debris particles
+	for i = 1, 15 do
+		local debris = Instance.new("Part")
+		debris.Size = Vector3.new(
+			math.random() * 1.5 + 0.3,
+			math.random() * 1.5 + 0.3,
+			math.random() * 1.5 + 0.3
+		)
+		debris.Position = basePos + Vector3.new(math.random(-3, 3), 0, math.random(-3, 3))
+		debris.Color = impactColor
+		debris.Material = Enum.Material.Neon
+		debris.CanCollide = false
+		debris.Anchored = false
+		debris.Parent = workspace
+
+		debris.Velocity = Vector3.new(
+			math.random(-30, 30),
+			math.random(20, 50),
+			math.random(-30, 30)
+		)
+
+		game:GetService("Debris"):AddItem(debris, impactDuration)
+	end
+end)
+
+-------------------------------------------------
+-- 14. KEYFRAME ANIMATION SYSTEM
+-------------------------------------------------
+local keyframeSection = createSection("🎬 Keyframe Animator")
+
+local kfColorStart = Color3.fromRGB(255, 0, 0)
+local kfColorEnd = Color3.fromRGB(0, 0, 255)
+local kfDuration = 3
+local kfRepeat = true
+local kfEasing = "Sine"
+local kfProperty = "Aura Color"
+
+createColorPicker(keyframeSection, "Start Color", UDim2.new(0, 0, 0, 0), kfColorStart, function(c) kfColorStart = c end)
+createColorPicker(keyframeSection, "End Color", UDim2.new(0, 0, 0, 0), kfColorEnd, function(c) kfColorEnd = c end)
+createSlider(keyframeSection, "Duration (sec)", UDim2.new(0, 0, 0, 0), 0.5, 15, kfDuration, function(v) kfDuration = v end)
+
+-- Easing selector
+local easingFrame = Instance.new("Frame")
+easingFrame.Size = UDim2.new(0.9, 0, 0, 35)
+easingFrame.BackgroundTransparency = 1
+easingFrame.Parent = keyframeSection
+
+local easingLabel = Instance.new("TextLabel")
+easingLabel.Size = UDim2.new(0.3, 0, 1, 0)
+easingLabel.BackgroundTransparency = 1
+easingLabel.Text = "Easing:"
+easingLabel.TextColor3 = Color3.fromRGB(220, 220, 255)
+easingLabel.Font = Enum.Font.Gotham
+easingLabel.TextSize = 11
+easingLabel.TextXAlignment = Enum.TextXAlignment.Left
+easingLabel.Parent = easingFrame
+
+local easings = {"Linear", "Sine", "Quad", "Bounce", "Elastic"}
+local easingBtnFrame = Instance.new("Frame")
+easingBtnFrame.Size = UDim2.new(0.7, 0, 1, 0)
+easingBtnFrame.Position = UDim2.new(0.3, 0, 0, 0)
+easingBtnFrame.BackgroundTransparency = 1
+easingBtnFrame.Parent = easingFrame
+
+local easingListLayout = Instance.new("UIListLayout")
+easingListLayout.FillDirection = Enum.FillDirection.Horizontal
+easingListLayout.Padding = UDim.new(0, 3)
+easingListLayout.Parent = easingBtnFrame
+
+for _, easeName in ipairs(easings) do
+	local eBtn = Instance.new("TextButton")
+	eBtn.Size = UDim2.new(0, 38, 0, 28)
+	eBtn.Text = easeName:sub(1, 4)
+	eBtn.BackgroundColor3 = easeName == kfEasing and Color3.fromRGB(100, 80, 200) or Color3.fromRGB(50, 50, 70)
+	eBtn.TextColor3 = Color3.new(1, 1, 1)
+	eBtn.Font = Enum.Font.Gotham
+	eBtn.TextSize = 9
+	eBtn.Parent = easingBtnFrame
+	createCorner(eBtn, 4)
+	eBtn.MouseButton1Click:Connect(function()
+		kfEasing = easeName
+		for _, child in pairs(easingBtnFrame:GetChildren()) do
+			if child:IsA("TextButton") then
+				child.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+			end
+		end
+		eBtn.BackgroundColor3 = Color3.fromRGB(100, 80, 200)
+	end)
+end
+
+-- Target property selector
+local targetFrame = Instance.new("Frame")
+targetFrame.Size = UDim2.new(0.9, 0, 0, 80)
+targetFrame.BackgroundTransparency = 1
+targetFrame.Parent = keyframeSection
+
+local targetLabel = Instance.new("TextLabel")
+targetLabel.Size = UDim2.new(1, 0, 0, 18)
+targetLabel.BackgroundTransparency = 1
+targetLabel.Text = "Animate Target:"
+targetLabel.TextColor3 = Color3.fromRGB(220, 220, 255)
+targetLabel.Font = Enum.Font.Gotham
+targetLabel.TextSize = 11
+targetLabel.TextXAlignment = Enum.TextXAlignment.Left
+targetLabel.Parent = targetFrame
+
+local targets = {"Aura Color", "Glow Color", "Shield Color", "Orb Color", "Trail Color"}
+local targetBtnContainer = Instance.new("Frame")
+targetBtnContainer.Size = UDim2.new(1, 0, 0, 55)
+targetBtnContainer.Position = UDim2.new(0, 0, 0, 20)
+targetBtnContainer.BackgroundTransparency = 1
+targetBtnContainer.Parent = targetFrame
+
+local targetListLayout = Instance.new("UIListLayout")
+targetListLayout.FillDirection = Enum.FillDirection.Horizontal
+targetListLayout.Padding = UDim.new(0, 4)
+targetListLayout.Wraps = true
+targetListLayout.Parent = targetBtnContainer
+
+for _, tgt in ipairs(targets) do
+	local tBtn = Instance.new("TextButton")
+	tBtn.Size = UDim2.new(0, 70, 0, 25)
+	tBtn.Text = tgt
+	tBtn.BackgroundColor3 = tgt == kfProperty and Color3.fromRGB(100, 80, 200) or Color3.fromRGB(50, 50, 70)
+	tBtn.TextColor3 = Color3.new(1, 1, 1)
+	tBtn.Font = Enum.Font.Gotham
+	tBtn.TextSize = 9
+	tBtn.TextScaled = true
+	tBtn.Parent = targetBtnContainer
+	createCorner(tBtn, 4)
+	tBtn.MouseButton1Click:Connect(function()
+		kfProperty = tgt
+		for _, child in pairs(targetBtnContainer:GetChildren()) do
+			if child:IsA("TextButton") then
+				child.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+			end
+		end
+		tBtn.BackgroundColor3 = Color3.fromRGB(100, 80, 200)
+	end)
+end
+
+local toggleRepeatBtn = createButton(keyframeSection, "Loop: ON", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 35), Color3.fromRGB(50, 80, 50))
+toggleRepeatBtn.MouseButton1Click:Connect(function()
+	kfRepeat = not kfRepeat
+	toggleRepeatBtn.Text = "Loop: " .. (kfRepeat and "ON" or "OFF")
+	toggleRepeatBtn.BackgroundColor3 = kfRepeat and Color3.fromRGB(50, 80, 50) or Color3.fromRGB(80, 50, 50)
+end)
+
+local playKFBtn = createButton(keyframeSection, "▶️ Play Animation", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(30, 120, 30))
+local stopKFBtn = createButton(keyframeSection, "⏹ Stop Animation", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(140, 40, 40))
+
+playKFBtn.MouseButton1Click:Connect(function()
+	if activeConnections["keyframe"] then
+		activeConnections["keyframe"]:Disconnect()
+	end
+
+	local startTime = tick()
+	local easingStyle = Enum.EasingStyle[kfEasing] or Enum.EasingStyle.Sine
+
+	local conn = RunService.Heartbeat:Connect(function()
+		local elapsed = tick() - startTime
+		local t = elapsed / kfDuration
+
+		if kfRepeat then
+			t = t % 1
+			-- Ping-pong
+			if math.floor(elapsed / kfDuration) % 2 == 1 then
+				t = 1 - t
+			end
+		else
+			t = math.clamp(t, 0, 1)
+		end
+
+		-- Apply easing
+		local easedT = TweenService:GetValue(t, easingStyle, Enum.EasingDirection.InOut)
+
+		-- Interpolate color
+		local currentColor = kfColorStart:Lerp(kfColorEnd, easedT)
+
+		-- Apply to target
+		if kfProperty == "Aura Color" then
+			auraColor = currentColor
+			if activeEffects["aura"] then
+				local emitter = activeEffects["aura"]:FindFirstChildWhichIsA("ParticleEmitter")
+				if emitter then
+					emitter.Color = ColorSequence.new(currentColor)
+				end
+			end
+		elseif kfProperty == "Glow Color" then
+			glowFillColor = currentColor
+			if activeEffects["glow"] then
+				activeEffects["glow"].FillColor = currentColor
+			end
+		elseif kfProperty == "Shield Color" then
+			shieldColor = currentColor
+			if activeEffects["shield"] then
+				activeEffects["shield"].Color = currentColor
+			end
+		elseif kfProperty == "Orb Color" then
+			orbColor = currentColor
+			-- Orbs are updated in their own heartbeat connection
+		elseif kfProperty == "Trail Color" then
+			if activeEffects["trail"] then
+				local trail = nil
+				for _, v in pairs(activeEffects["trail"]) do
+					if v:IsA("Trail") then trail = v; break end
+				end
+				if trail then
+					trail.Color = ColorSequence.new({
+						ColorSequenceKeypoint.new(0, currentColor),
+						ColorSequenceKeypoint.new(1, kfColorEnd:Lerp(kfColorStart, easedT))
+					})
+				end
+			end
+		end
+
+		if not kfRepeat and t >= 1 then
+			-- Stop
+		end
+	end)
+
+	activeConnections["keyframe"] = conn
+end)
+
+stopKFBtn.MouseButton1Click:Connect(function()
+	if activeConnections["keyframe"] then
+		activeConnections["keyframe"]:Disconnect()
+		activeConnections["keyframe"] = nil
+	end
+end)
+
+-------------------------------------------------
+-- 15. SCREEN FLASH / CAMERA SHAKE
+-------------------------------------------------
+local cameraFXSection = createSection("📸 Camera FX")
+
+local flashColor = Color3.fromRGB(255, 255, 255)
+local flashDuration = 0.5
+local shakeIntensity = 5
+local shakeDuration = 0.5
+
+createColorPicker(cameraFXSection, "Flash Color", UDim2.new(0, 0, 0, 0), flashColor, function(c) flashColor = c end)
+createSlider(cameraFXSection, "Flash Duration", UDim2.new(0, 0, 0, 0), 0.1, 3, flashDuration, function(v) flashDuration = v end)
+createSlider(cameraFXSection, "Shake Intensity", UDim2.new(0, 0, 0, 0), 1, 30, shakeIntensity, function(v) shakeIntensity = v end)
+createSlider(cameraFXSection, "Shake Duration", UDim2.new(0, 0, 0, 0), 0.1, 3, shakeDuration, function(v) shakeDuration = v end)
+
+local screenFlashBtn = createButton(cameraFXSection, "⚡ Screen Flash", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(120, 120, 30))
+local cameraShakeBtn = createButton(cameraFXSection, "📸 Camera Shake", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(120, 80, 30))
+local comboBtn = createButton(cameraFXSection, "💥 Flash + Shake Combo", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(140, 40, 60))
+
+local function doScreenFlash()
+	local flashFrame = Instance.new("Frame")
+	flashFrame.Size = UDim2.new(1, 0, 1, 0)
+	flashFrame.BackgroundColor3 = flashColor
+	flashFrame.BackgroundTransparency = 0
+	flashFrame.ZIndex = 200
+	flashFrame.Parent = screenGui
+
+	TweenService:Create(flashFrame, TweenInfo.new(flashDuration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		BackgroundTransparency = 1
+	}):Play()
+
+	task.delay(flashDuration + 0.1, function()
+		flashFrame:Destroy()
+	end)
+end
+
+local function doCameraShake()
+	local camera = workspace.CurrentCamera
+	local originalCF = camera.CFrame
+	local startTime = tick()
+
+	local conn
+	conn = RunService.RenderStepped:Connect(function()
+		local elapsed = tick() - startTime
+		if elapsed > shakeDuration then
+			conn:Disconnect()
+			return
+		end
+
+		local progress = elapsed / shakeDuration
+		local intensity = shakeIntensity * (1 - progress)
+		local offsetX = (math.random() - 0.5) * 2 * intensity * 0.05
+		local offsetY = (math.random() - 0.5) * 2 * intensity * 0.05
+		local offsetZ = (math.random() - 0.5) * 2 * intensity * 0.05
+
+		camera.CFrame = camera.CFrame * CFrame.new(offsetX, offsetY, offsetZ)
+	end)
+end
+
+screenFlashBtn.MouseButton1Click:Connect(doScreenFlash)
+cameraShakeBtn.MouseButton1Click:Connect(doCameraShake)
+comboBtn.MouseButton1Click:Connect(function()
+	doScreenFlash()
+	doCameraShake()
+end)
+
+-------------------------------------------------
+-- 16. TEXT BILLBOARD
+-------------------------------------------------
+local textSection = createSection("💬 Floating Text")
+
+local billboardText = "VFX MASTER"
+local billboardColor = Color3.fromRGB(255, 255, 0)
+local billboardSize = 3
+local billboardStroke = true
+local billboardStrokeColor = Color3.fromRGB(0, 0, 0)
+local billboardBob = true
+
+local textInput = Instance.new("TextBox")
+textInput.Size = UDim2.new(0.9, 0, 0, 35)
+textInput.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+textInput.TextColor3 = Color3.new(1, 1, 1)
+textInput.PlaceholderText = "Enter text..."
+textInput.Text = billboardText
+textInput.Font = Enum.Font.GothamBold
+textInput.TextSize = 14
+textInput.ClearTextOnFocus = false
+textInput.Parent = textSection
+createCorner(textInput, 6)
+createStroke(textInput, Color3.fromRGB(80, 80, 120), 1)
+
+textInput.FocusLost:Connect(function()
+	billboardText = textInput.Text
+end)
+
+createColorPicker(textSection, "Text Color", UDim2.new(0, 0, 0, 0), billboardColor, function(c) billboardColor = c end)
+createSlider(textSection, "Size", UDim2.new(0, 0, 0, 0), 1, 10, billboardSize, function(v) billboardSize = v end)
+
+local applyTextBtn = createButton(textSection, "💬 Show Text", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(60, 100, 30))
+local removeTextBtn = createButton(textSection, "❌ Remove Text", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(140, 40, 40))
+
+applyTextBtn.MouseButton1Click:Connect(function()
+	if activeEffects["billboard"] then
+		activeEffects["billboard"]:Destroy()
+	end
+	if activeConnections["billboard"] then
+		activeConnections["billboard"]:Disconnect()
+	end
+
+	local head = character:FindFirstChild("Head")
+	if not head then return end
+
+	local bbGui = Instance.new("BillboardGui")
+	bbGui.Name = "VFXBillboard"
+	bbGui.Size = UDim2.new(billboardSize * 2, 0, billboardSize, 0)
+	bbGui.StudsOffset = Vector3.new(0, 3, 0)
+	bbGui.AlwaysOnTop = true
+	bbGui.Adornee = head
+	bbGui.Parent = head
+
+	local textLabel = Instance.new("TextLabel")
+	textLabel.Size = UDim2.new(1, 0, 1, 0)
+	textLabel.BackgroundTransparency = 1
+	textLabel.Text = billboardText
+	textLabel.TextColor3 = billboardColor
+	textLabel.Font = Enum.Font.GothamBold
+	textLabel.TextScaled = true
+	textLabel.Parent = bbGui
+
+	local textStroke = Instance.new("UIStroke")
+	textStroke.Color = billboardStrokeColor
+	textStroke.Thickness = 2
+	textStroke.Parent = textLabel
+
+	activeEffects["billboard"] = bbGui
+
+	-- Bob animation
+	local conn = RunService.Heartbeat:Connect(function()
+		if bbGui and bbGui.Parent then
+			local bob = math.sin(tick() * 2) * 0.3
+			bbGui.StudsOffset = Vector3.new(0, 3 + bob, 0)
+			textLabel.TextColor3 = billboardColor
+		end
+	end)
+	activeConnections["billboard"] = conn
+end)
+
+removeTextBtn.MouseButton1Click:Connect(function()
+	if activeEffects["billboard"] then
+		activeEffects["billboard"]:Destroy()
+		activeEffects["billboard"] = nil
+	end
+	if activeConnections["billboard"] then
+		activeConnections["billboard"]:Disconnect()
+		activeConnections["billboard"] = nil
+	end
+end)
+
+-------------------------------------------------
+-- 17. ATMOSPHERE CONTROL
+-------------------------------------------------
+local atmosSection = createSection("🌍 Atmosphere")
+
+local atmosDensity = 0.3
+local atmosColor = Color3.fromRGB(180, 180, 200)
+local atmosDecay = Color3.fromRGB(100, 100, 120)
+local atmosGlare = 0
+local atmosHaze = 0
+
+createSlider(atmosSection, "Density", UDim2.new(0, 0, 0, 0), 0, 1, atmosDensity, function(v) atmosDensity = v end)
+createColorPicker(atmosSection, "Atmos Color", UDim2.new(0, 0, 0, 0), atmosColor, function(c) atmosColor = c end)
+createSlider(atmosSection, "Glare", UDim2.new(0, 0, 0, 0), 0, 1, atmosGlare, function(v) atmosGlare = v end)
+createSlider(atmosSection, "Haze", UDim2.new(0, 0, 0, 0), 0, 3, atmosHaze, function(v) atmosHaze = v end)
+
+local applyAtmosBtn = createButton(atmosSection, "🌍 Apply Atmosphere", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(40, 80, 100))
+local removeAtmosBtn = createButton(atmosSection, "❌ Reset Atmosphere", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 40), Color3.fromRGB(140, 40, 40))
+
+applyAtmosBtn.MouseButton1Click:Connect(function()
+	local atmos = Lighting:FindFirstChildOfClass("Atmosphere")
+	if not atmos then
+		atmos = Instance.new("Atmosphere")
+		atmos.Parent = Lighting
+	end
+	atmos.Density = atmosDensity
+	atmos.Color = atmosColor
+	atmos.Decay = atmosDecay
+	atmos.Glare = atmosGlare
+	atmos.Haze = atmosHaze
+end)
+
+removeAtmosBtn.MouseButton1Click:Connect(function()
+	local atmos = Lighting:FindFirstChildOfClass("Atmosphere")
+	if atmos then
+		atmos:Destroy()
+	end
+end)
+
+-------------------------------------------------
+-- 18. PRESET VFX COMBOS
+-------------------------------------------------
+local presetSection = createSection("⭐ VFX Presets")
+
+local presets = {
+	{name = "🔵 Ice King", aura = Color3.fromRGB(100, 200, 255), glow = Color3.fromRGB(0, 150, 255), trail = Color3.fromRGB(150, 220, 255), orb = Color3.fromRGB(0, 200, 255)},
+	{name = "🔴 Fire Lord", aura = Color3.fromRGB(255, 80, 0), glow = Color3.fromRGB(255, 50, 0), trail = Color3.fromRGB(255, 150, 0), orb = Color3.fromRGB(255, 200, 50)},
+	{name = "🟣 Shadow Master", aura = Color3.fromRGB(80, 0, 150), glow = Color3.fromRGB(100, 0, 200), trail = Color3.fromRGB(150, 50, 255), orb = Color3.fromRGB(200, 100, 255)},
+	{name = "🟢 Nature Spirit", aura = Color3.fromRGB(0, 200, 50), glow = Color3.fromRGB(50, 255, 100), trail = Color3.fromRGB(100, 255, 150), orb = Color3.fromRGB(0, 255, 100)},
+	{name = "🟡 Golden God", aura = Color3.fromRGB(255, 215, 0), glow = Color3.fromRGB(255, 200, 50), trail = Color3.fromRGB(255, 230, 100), orb = Color3.fromRGB(255, 255, 150)},
+	{name = "⚫ Void Walker", aura = Color3.fromRGB(20, 0, 40), glow = Color3.fromRGB(40, 0, 80), trail = Color3.fromRGB(60, 0, 120), orb = Color3.fromRGB(80, 0, 160)},
+	{name = "🌈 Rainbow Mage", aura = Color3.fromRGB(255, 0, 0), glow = Color3.fromRGB(0, 255, 0), trail = Color3.fromRGB(0, 0, 255), orb = Color3.fromRGB(255, 255, 0)},
+}
+
+for _, preset in ipairs(presets) do
+	local presetBtn = createButton(presetSection, preset.name, UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 38), Color3.fromRGB(40, 40, 70))
+	presetBtn.MouseButton1Click:Connect(function()
+		auraColor = preset.aura
+		glowFillColor = preset.glow
+		trailColor1 = preset.trail
+		orbColor = preset.orb
+
+		-- Auto-apply if effects exist
+		if activeEffects["aura"] then
+			local emitter = activeEffects["aura"]:FindFirstChildWhichIsA("ParticleEmitter")
+			if emitter then
+				emitter.Color = ColorSequence.new(preset.aura)
+			end
+		end
+		if activeEffects["glow"] then
+			activeEffects["glow"].FillColor = preset.glow
+		end
+		if activeEffects["trail"] then
+			for _, v in pairs(activeEffects["trail"]) do
+				if v:IsA("Trail") then
+					v.Color = ColorSequence.new({
+						ColorSequenceKeypoint.new(0, preset.trail),
+						ColorSequenceKeypoint.new(1, preset.aura)
+					})
+				end
+			end
+		end
+	end)
+end
+
+-------------------------------------------------
+-- 19. CLEAR ALL EFFECTS
+-------------------------------------------------
+local clearSection = createSection("🗑️ Master Controls")
+
+local clearAllBtn = createButton(clearSection, "🗑️ CLEAR ALL EFFECTS", UDim2.new(0, 0, 0, 0), UDim2.new(0.9, 0, 0, 50), Color3.fromRGB(180, 30, 30))
+clearAllBtn.TextSize = 16
+
+clearAllBtn.MouseButton1Click:Connect(function()
+	-- Disconnect all connections
+	for key, conn in pairs(activeConnections) do
+		if conn then conn:Disconnect() end
+		activeConnections[key] = nil
+	end
+
+	-- Destroy all effects
+	for key, effect in pairs(activeEffects) do
+		if typeof(effect) == "table" then
+			for _, v in pairs(effect) do
+				if typeof(v) == "Instance" then v:Destroy() end
+			end
+		elseif typeof(effect) == "Instance" then
+			effect:Destroy()
+		end
+		activeEffects[key] = nil
+	end
+
+	-- Clear screen effects
+	for _, child in pairs(Lighting:GetChildren()) do
+		if child.Name:sub(1, 3) == "VFX" then
+			child:Destroy()
+		end
+	end
+
+	-- Reset speed
+	local hum = character:FindFirstChild("Humanoid")
+	if hum then
+		hum.WalkSpeed = 16
+		hum.JumpPower = 50
+	end
+end)
+
+-------------------------------------------------
+-- STARTUP MESSAGE
+-------------------------------------------------
+local welcomeFrame = Instance.new("Frame")
+welcomeFrame.Size = UDim2.new(0.7, 0, 0, 60)
+welcomeFrame.Position = UDim2.new(0.15, 0, 0.05, 0)
+welcomeFrame.BackgroundColor3 = Color3.fromRGB(30, 20, 60)
+welcomeFrame.ZIndex = 150
+welcomeFrame.Parent = screenGui
+createCorner(welcomeFrame, 10)
+createStroke(welcomeFrame, Color3.fromRGB(150, 100, 255), 2)
+
+local welcomeText = Instance.new("TextLabel")
+welcomeText.Size = UDim2.new(1, 0, 1, 0)
+welcomeText.BackgroundTransparency = 1
+welcomeText.Text = "⚡ VFX Creator Loaded! ⚡\nTap the VFX button to open"
+welcomeText.TextColor3 = Color3.fromRGB(200, 180, 255)
+welcomeText.Font = Enum.Font.GothamBold
+welcomeText.TextSize = 14
+welcomeText.TextScaled = true
+welcomeText.Parent = welcomeFrame
+
+TweenService:Create(welcomeFrame, TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 3), {
+	BackgroundTransparency = 1
+}):Play()
+TweenService:Create(welcomeText, TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 3), {
+	TextTransparency = 1
+}):Play()
+
+task.delay(5, function()
+	welcomeFrame:Destroy()
+end)
+
+print("✅ Mobile VFX Creator loaded successfully!")
