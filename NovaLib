@@ -1,0 +1,1434 @@
+local P = game:GetService("Players")
+local TS = game:GetService("TweenService")
+local UIS = game:GetService("UserInputService")
+local CG = game:GetService("CoreGui")
+local RS = game:GetService("RunService")
+local L = P.LocalPlayer
+local Nova = {}
+local Mb = UIS.TouchEnabled and not UIS.KeyboardEnabled
+
+local T = {
+    Bg = Color3.fromRGB(15, 15, 25),
+    Bg2 = Color3.fromRGB(22, 22, 35),
+    Bg3 = Color3.fromRGB(30, 30, 45),
+    Tab = Color3.fromRGB(18, 18, 30),
+    TabA = Color3.fromRGB(40, 40, 60),
+    Ac = Color3.fromRGB(88, 101, 242),
+    AcD = Color3.fromRGB(60, 70, 200),
+    AcL = Color3.fromRGB(120, 130, 255),
+    Tx = Color3.fromRGB(240, 240, 255),
+    STx = Color3.fromRGB(150, 150, 180),
+    DTx = Color3.fromRGB(90, 90, 120),
+    Dv = Color3.fromRGB(40, 40, 60),
+    Tg = Color3.fromRGB(50, 50, 70),
+    TgE = Color3.fromRGB(88, 101, 242),
+    SBg = Color3.fromRGB(35, 35, 55),
+    IBg = Color3.fromRGB(25, 25, 40),
+    Nt = Color3.fromRGB(20, 20, 35),
+    Suc = Color3.fromRGB(67, 181, 129),
+    Wrn = Color3.fromRGB(250, 166, 26),
+    Err = Color3.fromRGB(237, 66, 69),
+    Hover = Color3.fromRGB(45, 45, 65)
+}
+
+local Icons = {
+    Home = "rbxassetid://7733960981",
+    Combat = "rbxassetid://7734053495",
+    Teleport = "rbxassetid://7734042807",
+    Settings = "rbxassetid://7734053495",
+    Player = "rbxassetid://7743878857",
+    Star = "rbxassetid://7734042807",
+    Search = "rbxassetid://7734042807",
+    Menu = "rbxassetid://7733717504",
+    Close = "rbxassetid://7743878857",
+    Check = "rbxassetid://7733715400"
+}
+
+local function C(c, p)
+    local i = Instance.new(c)
+    for k, v in pairs(p or {}) do
+        i[k] = v
+    end
+    return i
+end
+
+local function Tw(i, d, p, s)
+    local t = TS:Create(i, TweenInfo.new(d, s or Enum.EasingStyle.Quint, Enum.EasingDirection.Out), p)
+    t:Play()
+    return t
+end
+
+local function Cr(p, r)
+    return C("UICorner", {CornerRadius = UDim.new(0, r or 8), Parent = p})
+end
+
+local function St(p, c, t, tr)
+    return C("UIStroke", {Color = c or Color3.new(1,1,1), Thickness = t or 1, Transparency = tr or 0.85, Parent = p})
+end
+
+local function Pd(p, t, b, l, r)
+    return C("UIPadding", {
+        PaddingTop = UDim.new(0, t or 0),
+        PaddingBottom = UDim.new(0, b or 0),
+        PaddingLeft = UDim.new(0, l or 0),
+        PaddingRight = UDim.new(0, r or 0),
+        Parent = p
+    })
+end
+
+local function AddGradient(parent, c1, c2, rot)
+    return C("UIGradient", {
+        Color = ColorSequence.new(c1 or T.Ac, c2 or T.AcL),
+        Rotation = rot or 90,
+        Parent = parent
+    })
+end
+
+local function Rp(b)
+    b.ClipsDescendants = true
+    b.InputBegan:Connect(function(i)
+        local mt = Enum.UserInputType.MouseButton1
+        local tc = Enum.UserInputType.Touch
+        if i.UserInputType ~= mt and i.UserInputType ~= tc then
+            return
+        end
+        local r = C("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundColor3 = Color3.new(1, 1, 1),
+            BackgroundTransparency = 0.85,
+            Position = UDim2.new(0, i.Position.X - b.AbsolutePosition.X, 0, i.Position.Y - b.AbsolutePosition.Y),
+            Size = UDim2.new(0, 0, 0, 0),
+            Parent = b
+        })
+        Cr(r, 999)
+        local mx = math.max(b.AbsoluteSize.X, b.AbsoluteSize.Y) * 2.5
+        Tw(r, 0.6, {Size = UDim2.new(0, mx, 0, mx), BackgroundTransparency = 1})
+        task.delay(0.6, function()
+            r:Destroy()
+        end)
+    end)
+end
+
+local NH
+
+function Nova:CreateWindow(cfg)
+    cfg = cfg or {}
+    local Title = cfg.Title or "Nova Hub"
+    local Sub = cfg.SubTitle or "v1.0"
+    local TW = cfg.TabWidth or (Mb and 52 or 140)
+    local WS
+    if Mb then
+        WS = UDim2.new(0, 340, 0, 380)
+    else
+        WS = UDim2.new(0, 480, 0, 380)
+    end
+    if cfg.Size then
+        WS = cfg.Size
+    end
+
+    local W = {}
+    W.Tabs = {}
+    W.ActiveTab = nil
+    W.Min = false
+    W.Vis = true
+
+    local SG = C("ScreenGui", {
+        Name = "NovaUI_" .. math.random(1000, 9999),
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+        ResetOnSpawn = false,
+        IgnoreGuiInset = true
+    })
+    pcall(function()
+        SG.Parent = CG
+    end)
+    if not SG.Parent then
+        SG.Parent = L:WaitForChild("PlayerGui")
+    end
+
+    local ToggleSize = Mb and 44 or 36
+    local ToggleBtn = C("TextButton", {
+        Name = "NovaToggle",
+        BackgroundColor3 = T.Ac,
+        Size = UDim2.new(0, ToggleSize, 0, ToggleSize),
+        Position = UDim2.new(0, 16, 0, 16),
+        Text = "",
+        AutoButtonColor = false,
+        ZIndex = 999,
+        Parent = SG
+    })
+    Cr(ToggleBtn, ToggleSize / 2)
+    St(ToggleBtn, T.AcL, 2, 0.3)
+
+    local ToggleIcon = C("ImageLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0, 20, 0, 20),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Image = Icons.Menu,
+        ImageColor3 = Color3.new(1, 1, 1),
+        ZIndex = 1000,
+        Parent = ToggleBtn
+    })
+
+    local ToggleShadow = C("Frame", {
+        Name = "Glow",
+        BackgroundColor3 = T.Ac,
+        BackgroundTransparency = 0.6,
+        Size = UDim2.new(1, 12, 1, 12),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        ZIndex = 998,
+        Parent = ToggleBtn
+    })
+    Cr(ToggleShadow, ToggleSize)
+
+    local tDrag = false
+    local tDS, tSP
+
+    ToggleBtn.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            tDrag = true
+            tDS = i.Position
+            tSP = ToggleBtn.Position
+        end
+    end)
+
+    UIS.InputChanged:Connect(function(i)
+        if not tDrag then return end
+        if i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch then
+            local d = i.Position - tDS
+            local dist = math.sqrt(d.X * d.X + d.Y * d.Y)
+            if dist > 5 then
+                ToggleBtn.Position = UDim2.new(
+                    tSP.X.Scale, tSP.X.Offset + d.X,
+                    tSP.Y.Scale, tSP.Y.Offset + d.Y
+                )
+            end
+        end
+    end)
+
+    UIS.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            if tDrag then
+                local d = i.Position - tDS
+                local dist = math.sqrt(d.X * d.X + d.Y * d.Y)
+                tDrag = false
+                if dist <= 5 then
+                    W.Vis = not W.Vis
+                    if W.Vis then
+                        MF.Visible = true
+                        Tw(MF, 0.4, {
+                            Size = WS,
+                            BackgroundTransparency = 0
+                        }, Enum.EasingStyle.Back)
+                        Tw(ToggleShadow, 0.3, {BackgroundTransparency = 0.6})
+                    else
+                        Tw(MF, 0.3, {
+                            Size = UDim2.new(0, 0, 0, 0),
+                            BackgroundTransparency = 1
+                        })
+                        Tw(ToggleShadow, 0.3, {BackgroundTransparency = 0.9})
+                        task.delay(0.3, function()
+                            if not W.Vis then
+                                MF.Visible = false
+                            end
+                        end)
+                    end
+                end
+            end
+        end
+    end)
+
+    ToggleBtn.MouseEnter:Connect(function()
+        Tw(ToggleBtn, 0.2, {Size = UDim2.new(0, ToggleSize + 4, 0, ToggleSize + 4)})
+    end)
+    ToggleBtn.MouseLeave:Connect(function()
+        Tw(ToggleBtn, 0.2, {Size = UDim2.new(0, ToggleSize, 0, ToggleSize)})
+    end)
+
+    local MF = C("Frame", {
+        Name = "Main",
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundColor3 = T.Bg,
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        Size = UDim2.new(0, 0, 0, 0),
+        BackgroundTransparency = 1,
+        ClipsDescendants = true,
+        Parent = SG
+    })
+    Cr(MF, 14)
+    St(MF, T.Dv, 1, 0.5)
+
+    local Shadow = C("ImageLabel", {
+        Name = "Shadow",
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0.5, 0, 0.5, 4),
+        Size = UDim2.new(1, 40, 1, 40),
+        ZIndex = 0,
+        Image = "rbxassetid://6014261993",
+        ImageColor3 = Color3.fromRGB(0, 0, 0),
+        ImageTransparency = 0.4,
+        ScaleType = Enum.ScaleType.Slice,
+        SliceCenter = Rect.new(49, 49, 450, 450),
+        Parent = MF
+    })
+
+    Tw(MF, 0.7, {
+        Size = WS,
+        BackgroundTransparency = 0
+    }, Enum.EasingStyle.Back)
+
+    local tbh = Mb and 48 or 40
+
+    local TB = C("Frame", {
+        BackgroundColor3 = T.Bg2,
+        Size = UDim2.new(1, 0, 0, tbh),
+        Parent = MF
+    })
+    Cr(TB, 14)
+
+    C("Frame", {
+        BackgroundColor3 = T.Bg2,
+        Size = UDim2.new(1, 0, 0, 16),
+        Position = UDim2.new(0, 0, 1, -16),
+        BorderSizePixel = 0,
+        Parent = TB
+    })
+
+    local AccLine = C("Frame", {
+        BackgroundColor3 = T.Ac,
+        Size = UDim2.new(1, 0, 0, 2),
+        Position = UDim2.new(0, 0, 1, 0),
+        BorderSizePixel = 0,
+        Parent = TB
+    })
+    AddGradient(AccLine, T.AcD, T.AcL, 0)
+
+    local is = Mb and 22 or 18
+
+    local TI = C("Frame", {
+        BackgroundColor3 = T.Ac,
+        Size = UDim2.new(0, is, 0, is),
+        Position = UDim2.new(0, 14, 0.5, 0),
+        AnchorPoint = Vector2.new(0, 0.5),
+        Parent = TB
+    })
+    Cr(TI, 6)
+    AddGradient(TI, T.Ac, T.AcL, 45)
+
+    local dot = C("Frame", {
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        Size = UDim2.new(0, 6, 0, 6),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Parent = TI
+    })
+    Cr(dot, 3)
+
+    local txp = Mb and 44 or 38
+
+    C("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, txp, 0, 0),
+        Size = UDim2.new(0.5, 0, 1, 0),
+        Font = Enum.Font.GothamBold,
+        Text = Title,
+        TextColor3 = T.Tx,
+        TextSize = Mb and 16 or 14,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = TB
+    })
+
+    C("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, txp, 0, Mb and 20 or 16),
+        Size = UDim2.new(0.5, 0, 0, 16),
+        Font = Enum.Font.Gotham,
+        Text = Sub,
+        TextColor3 = T.DTx,
+        TextSize = Mb and 11 or 10,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = TB
+    })
+
+    local bs = Mb and 26 or 20
+
+    local ClB = C("TextButton", {
+        BackgroundColor3 = T.Err,
+        BackgroundTransparency = 0.8,
+        Size = UDim2.new(0, bs, 0, bs),
+        Position = UDim2.new(1, -(bs + 12), 0.5, 0),
+        AnchorPoint = Vector2.new(0, 0.5),
+        Text = "X",
+        TextColor3 = T.Err,
+        TextSize = Mb and 14 or 12,
+        Font = Enum.Font.GothamBold,
+        AutoButtonColor = false,
+        Parent = TB
+    })
+    Cr(ClB, bs / 2)
+
+    local MnB = C("TextButton", {
+        BackgroundColor3 = T.Wrn,
+        BackgroundTransparency = 0.8,
+        Size = UDim2.new(0, bs, 0, bs),
+        Position = UDim2.new(1, -(bs * 2 + 18), 0.5, 0),
+        AnchorPoint = Vector2.new(0, 0.5),
+        Text = "-",
+        TextColor3 = T.Wrn,
+        TextSize = Mb and 18 or 16,
+        Font = Enum.Font.GothamBold,
+        AutoButtonColor = false,
+        Parent = TB
+    })
+    Cr(MnB, bs / 2)
+
+    ClB.MouseEnter:Connect(function()
+        Tw(ClB, 0.2, {BackgroundTransparency = 0.3})
+    end)
+    ClB.MouseLeave:Connect(function()
+        Tw(ClB, 0.2, {BackgroundTransparency = 0.8})
+    end)
+    MnB.MouseEnter:Connect(function()
+        Tw(MnB, 0.2, {BackgroundTransparency = 0.3})
+    end)
+    MnB.MouseLeave:Connect(function()
+        Tw(MnB, 0.2, {BackgroundTransparency = 0.8})
+    end)
+
+    MnB.MouseButton1Click:Connect(function()
+        W.Min = not W.Min
+        if W.Min then
+            Tw(MF, 0.4, {Size = UDim2.new(WS.X.Scale, WS.X.Offset, 0, Mb and 50 or 42)})
+        else
+            Tw(MF, 0.4, {Size = WS}, Enum.EasingStyle.Back)
+        end
+    end)
+
+    ClB.MouseButton1Click:Connect(function()
+        W.Vis = false
+        Tw(MF, 0.3, {
+            Size = UDim2.new(0, 0, 0, 0),
+            BackgroundTransparency = 1
+        })
+        Tw(ToggleShadow, 0.3, {BackgroundTransparency = 0.9})
+        task.delay(0.3, function()
+            MF.Visible = false
+        end)
+    end)
+
+    local dg = false
+    local ds, dp
+
+    TB.InputBegan:Connect(function(i)
+        local mt = Enum.UserInputType.MouseButton1
+        local tc = Enum.UserInputType.Touch
+        if i.UserInputType == mt or i.UserInputType == tc then
+            dg = true
+            ds = i.Position
+            dp = MF.Position
+        end
+    end)
+
+    UIS.InputChanged:Connect(function(i)
+        if not dg then return end
+        local mm = Enum.UserInputType.MouseMovement
+        local tc = Enum.UserInputType.Touch
+        if i.UserInputType == mm or i.UserInputType == tc then
+            local d = i.Position - ds
+            MF.Position = UDim2.new(dp.X.Scale, dp.X.Offset + d.X, dp.Y.Scale, dp.Y.Offset + d.Y)
+        end
+    end)
+
+    UIS.InputEnded:Connect(function(i)
+        local mt = Enum.UserInputType.MouseButton1
+        local tc = Enum.UserInputType.Touch
+        if i.UserInputType == mt or i.UserInputType == tc then
+            dg = false
+        end
+    end)
+
+    local cfo = Mb and 50 or 42
+
+    local CF = C("Frame", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, cfo),
+        Size = UDim2.new(1, 0, 1, -cfo),
+        Parent = MF
+    })
+
+    local TS2 = C("Frame", {
+        BackgroundColor3 = T.Tab,
+        Size = UDim2.new(0, TW, 1, 0),
+        Parent = CF
+    })
+
+    C("Frame", {
+        BackgroundColor3 = T.Dv,
+        Size = UDim2.new(0, 1, 1, 0),
+        Position = UDim2.new(1, 0, 0, 0),
+        BorderSizePixel = 0,
+        BackgroundTransparency = 0.5,
+        Parent = TS2
+    })
+
+    local TSc = C("ScrollingFrame", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 1, 0),
+        ScrollBarThickness = 0,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        Parent = TS2
+    })
+    Pd(TSc, 6, 6, 6, 6)
+
+    C("UIListLayout", {
+        HorizontalAlignment = Enum.HorizontalAlignment.Center,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 3),
+        Parent = TSc
+    })
+
+    local TC = C("Frame", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, TW + 1, 0, 0),
+        Size = UDim2.new(1, -(TW + 1), 1, 0),
+        Parent = CF
+    })
+
+    NH = C("Frame", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(1, -12, 1, -12),
+        AnchorPoint = Vector2.new(1, 1),
+        Size = UDim2.new(0, Mb and 240 or 280, 1, -20),
+        ZIndex = 100,
+        Parent = SG
+    })
+
+    C("UIListLayout", {
+        VerticalAlignment = Enum.VerticalAlignment.Bottom,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 6),
+        Parent = NH
+    })
+
+    function W:CreateTab(tc2)
+        tc2 = tc2 or {}
+        local TN = tc2.Name or "Tab"
+        local TIc = tc2.Icon or ""
+        local Tab = {El = {}}
+
+        local bh = Mb and 40 or 34
+
+        local TBtn = C("TextButton", {
+            BackgroundColor3 = T.TabA,
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, bh),
+            Text = "",
+            AutoButtonColor = false,
+            LayoutOrder = #W.Tabs,
+            Parent = TSc
+        })
+        Cr(TBtn, 8)
+
+        if TIc ~= "" then
+            local ics = Mb and 20 or 16
+            C("ImageLabel", {
+                Name = "Ic",
+                BackgroundTransparency = 1,
+                Position = UDim2.new(0, Mb and 10 or 8, 0.5, 0),
+                AnchorPoint = Vector2.new(0, 0.5),
+                Size = UDim2.new(0, ics, 0, ics),
+                Image = TIc,
+                ImageColor3 = T.STx,
+                Parent = TBtn
+            })
+        end
+
+        local np
+        if TIc ~= "" then
+            np = Mb and 36 or 30
+        else
+            np = Mb and 12 or 8
+        end
+
+        local TNL = C("TextLabel", {
+            Name = "TN",
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0, np, 0, 0),
+            Size = UDim2.new(1, -np - 8, 1, 0),
+            Font = Enum.Font.GothamMedium,
+            Text = TN,
+            TextColor3 = T.STx,
+            TextSize = Mb and 13 or 12,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            Parent = TBtn
+        })
+
+        local AI = C("Frame", {
+            BackgroundColor3 = T.Ac,
+            Size = UDim2.new(0, 3, 0, 0),
+            Position = UDim2.new(0, 0, 0.5, 0),
+            AnchorPoint = Vector2.new(0, 0.5),
+            Parent = TBtn
+        })
+        Cr(AI, 2)
+
+        local TP = C("ScrollingFrame", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 1, 0),
+            ScrollBarThickness = 2,
+            ScrollBarImageColor3 = T.Ac,
+            ScrollBarImageTransparency = 0.5,
+            CanvasSize = UDim2.new(0, 0, 0, 0),
+            AutomaticCanvasSize = Enum.AutomaticSize.Y,
+            Visible = false,
+            Parent = TC
+        })
+        Pd(TP, 10, 10, 10, 10)
+
+        C("UIListLayout", {
+            HorizontalAlignment = Enum.HorizontalAlignment.Center,
+            SortOrder = Enum.SortOrder.LayoutOrder,
+            Padding = UDim.new(0, 6),
+            Parent = TP
+        })
+
+        local function Act()
+            for _, t in ipairs(W.Tabs) do
+                Tw(t.B, 0.3, {BackgroundTransparency = 1})
+                Tw(t.I, 0.3, {Size = UDim2.new(0, 3, 0, 0)})
+                local tn = t.B:FindFirstChild("TN")
+                if tn then
+                    Tw(tn, 0.3, {TextColor3 = T.STx})
+                end
+                local ic = t.B:FindFirstChild("Ic")
+                if ic then
+                    Tw(ic, 0.3, {ImageColor3 = T.STx})
+                end
+                t.P.Visible = false
+            end
+            Tw(TBtn, 0.3, {BackgroundTransparency = 0})
+            Tw(AI, 0.3, {Size = UDim2.new(0, 3, 0.5, 0)})
+            Tw(TNL, 0.3, {TextColor3 = T.Tx})
+            local ic2 = TBtn:FindFirstChild("Ic")
+            if ic2 then
+                Tw(ic2, 0.3, {ImageColor3 = T.Ac})
+            end
+            TP.Visible = true
+            W.ActiveTab = Tab
+        end
+
+        TBtn.MouseButton1Click:Connect(Act)
+        Rp(TBtn)
+
+        TBtn.MouseEnter:Connect(function()
+            if W.ActiveTab ~= Tab then
+                Tw(TBtn, 0.2, {BackgroundTransparency = 0.6})
+            end
+        end)
+        TBtn.MouseLeave:Connect(function()
+            if W.ActiveTab ~= Tab then
+                Tw(TBtn, 0.2, {BackgroundTransparency = 1})
+            end
+        end)
+
+        table.insert(W.Tabs, {B = TBtn, I = AI, P = TP, T = Tab})
+        if #W.Tabs == 1 then
+            Act()
+        end
+
+        local function CE(h)
+            local eh = h or (Mb and 46 or 38)
+            local co = C("Frame", {
+                BackgroundColor3 = T.Bg3,
+                Size = UDim2.new(1, 0, 0, eh),
+                LayoutOrder = #Tab.El,
+                Parent = TP
+            })
+            Cr(co, 8)
+            table.insert(Tab.El, co)
+            return co
+        end
+
+        function Tab:CreateSection(n)
+            local f = C("Frame", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 0, Mb and 30 or 24),
+                LayoutOrder = #Tab.El,
+                Parent = TP
+            })
+            table.insert(Tab.El, f)
+            C("TextLabel", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 1, 0),
+                Font = Enum.Font.GothamBold,
+                Text = string.upper(n or "SECTION"),
+                TextColor3 = T.DTx,
+                TextSize = Mb and 11 or 10,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Parent = f
+            })
+            local divider = C("Frame", {
+                BackgroundColor3 = T.Dv,
+                Size = UDim2.new(1, 0, 0, 1),
+                Position = UDim2.new(0, 0, 1, -1),
+                BorderSizePixel = 0,
+                BackgroundTransparency = 0.5,
+                Parent = f
+            })
+        end
+
+        function Tab:CreateLabel(tx)
+            local co = CE(Mb and 36 or 30)
+            local lb = C("TextLabel", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, -20, 1, 0),
+                Position = UDim2.new(0, 10, 0, 0),
+                Font = Enum.Font.Gotham,
+                Text = tx or "Label",
+                TextColor3 = T.STx,
+                TextSize = Mb and 13 or 11,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Parent = co
+            })
+            local Lb = {}
+            function Lb:Set(t)
+                lb.Text = t
+            end
+            return Lb
+        end
+
+        function Tab:CreateButton(cf)
+            cf = cf or {}
+            local co = CE()
+            local b = C("TextButton", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 1, 0),
+                Text = "",
+                Parent = co
+            })
+            C("TextLabel", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, -40, 1, 0),
+                Position = UDim2.new(0, 12, 0, 0),
+                Font = Enum.Font.GothamMedium,
+                Text = cf.Name or "Button",
+                TextColor3 = T.Tx,
+                TextSize = Mb and 14 or 12,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Parent = b
+            })
+            local arw = C("TextLabel", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(0, 20, 1, 0),
+                Position = UDim2.new(1, -28, 0, 0),
+                Font = Enum.Font.GothamBold,
+                Text = ">",
+                TextColor3 = T.Ac,
+                TextSize = Mb and 16 or 14,
+                Parent = b
+            })
+            Rp(b)
+            b.MouseEnter:Connect(function()
+                Tw(co, 0.2, {BackgroundColor3 = T.Hover})
+                Tw(arw, 0.2, {Position = UDim2.new(1, -24, 0, 0)})
+            end)
+            b.MouseLeave:Connect(function()
+                Tw(co, 0.2, {BackgroundColor3 = T.Bg3})
+                Tw(arw, 0.2, {Position = UDim2.new(1, -28, 0, 0)})
+            end)
+            b.MouseButton1Click:Connect(function()
+                if cf.Callback then
+                    cf.Callback()
+                end
+                Tw(co, 0.1, {BackgroundColor3 = T.Ac})
+                task.delay(0.15, function()
+                    Tw(co, 0.3, {BackgroundColor3 = T.Bg3})
+                end)
+            end)
+        end
+
+        function Tab:CreateToggle(cf)
+            cf = cf or {}
+            local Tg = {Value = cf.Default or false}
+            local co = CE()
+            C("TextLabel", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, -65, 1, 0),
+                Position = UDim2.new(0, 12, 0, 0),
+                Font = Enum.Font.GothamMedium,
+                Text = cf.Name or "Toggle",
+                TextColor3 = T.Tx,
+                TextSize = Mb and 14 or 12,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Parent = co
+            })
+            local tw2 = Mb and 44 or 38
+            local th2 = Mb and 24 or 20
+            local bg
+            if Tg.Value then
+                bg = T.TgE
+            else
+                bg = T.Tg
+            end
+            local tf = C("Frame", {
+                BackgroundColor3 = bg,
+                Size = UDim2.new(0, tw2, 0, th2),
+                Position = UDim2.new(1, -(tw2 + 10), 0.5, 0),
+                AnchorPoint = Vector2.new(0, 0.5),
+                Parent = co
+            })
+            Cr(tf, th2 / 2)
+            local ks = th2 - 4
+            local kp
+            if Tg.Value then
+                kp = UDim2.new(1, -(ks + 2), 0.5, 0)
+            else
+                kp = UDim2.new(0, 2, 0.5, 0)
+            end
+            local tk = C("Frame", {
+                BackgroundColor3 = Color3.new(1, 1, 1),
+                Size = UDim2.new(0, ks, 0, ks),
+                Position = kp,
+                AnchorPoint = Vector2.new(0, 0.5),
+                Parent = tf
+            })
+            Cr(tk, ks / 2)
+            local tb3 = C("TextButton", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 1, 0),
+                Text = "",
+                Parent = co
+            })
+            local function UT()
+                if Tg.Value then
+                    Tw(tf, 0.3, {BackgroundColor3 = T.TgE})
+                    Tw(tk, 0.3, {Position = UDim2.new(1, -(ks + 2), 0.5, 0)}, Enum.EasingStyle.Back)
+                else
+                    Tw(tf, 0.3, {BackgroundColor3 = T.Tg})
+                    Tw(tk, 0.3, {Position = UDim2.new(0, 2, 0.5, 0)}, Enum.EasingStyle.Back)
+                end
+            end
+            tb3.MouseButton1Click:Connect(function()
+                Tg.Value = not Tg.Value
+                UT()
+                if cf.Callback then
+                    cf.Callback(Tg.Value)
+                end
+            end)
+            function Tg:Set(v)
+                Tg.Value = v
+                UT()
+                if cf.Callback then
+                    cf.Callback(v)
+                end
+            end
+            return Tg
+        end
+
+        function Tab:CreateSlider(cf)
+            cf = cf or {}
+            local mn = cf.Min or 0
+            local mx = cf.Max or 100
+            local inc = cf.Increment or 1
+            local Sl = {Value = cf.Default or mn}
+            local ch2 = Mb and 58 or 50
+            local co = CE(ch2)
+            C("TextLabel", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(0.65, -12, 0, Mb and 24 or 20),
+                Position = UDim2.new(0, 12, 0, Mb and 2 or 1),
+                Font = Enum.Font.GothamMedium,
+                Text = cf.Name or "Slider",
+                TextColor3 = T.Tx,
+                TextSize = Mb and 13 or 11,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Parent = co
+            })
+            local vl = C("TextLabel", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(0.35, -12, 0, Mb and 24 or 20),
+                Position = UDim2.new(0.65, 0, 0, Mb and 2 or 1),
+                Font = Enum.Font.GothamBold,
+                Text = tostring(Sl.Value),
+                TextColor3 = T.Ac,
+                TextSize = Mb and 13 or 11,
+                TextXAlignment = Enum.TextXAlignment.Right,
+                Parent = co
+            })
+            local th3 = Mb and 6 or 4
+            local sty = -(th3 + (Mb and 12 or 10))
+            local st2 = C("Frame", {
+                BackgroundColor3 = T.SBg,
+                Size = UDim2.new(1, -24, 0, th3),
+                Position = UDim2.new(0, 12, 1, sty),
+                Parent = co
+            })
+            Cr(st2, th3 / 2)
+            local fp = (Sl.Value - mn) / (mx - mn)
+            local sf = C("Frame", {
+                BackgroundColor3 = T.Ac,
+                Size = UDim2.new(fp, 0, 1, 0),
+                Parent = st2
+            })
+            Cr(sf, th3 / 2)
+            AddGradient(sf, T.AcD, T.AcL, 0)
+            local ks2 = Mb and 16 or 12
+            local sk = C("Frame", {
+                BackgroundColor3 = Color3.new(1, 1, 1),
+                Size = UDim2.new(0, ks2, 0, ks2),
+                Position = UDim2.new(fp, 0, 0.5, 0),
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                ZIndex = 2,
+                Parent = st2
+            })
+            Cr(sk, ks2 / 2)
+            St(sk, T.Ac, 2, 0)
+            local sld = false
+            local function US(i)
+                local px = i.Position.X
+                local ax = st2.AbsolutePosition.X
+                local aw = st2.AbsoluteSize.X
+                local p = math.clamp((px - ax) / aw, 0, 1)
+                local rv = mn + (mx - mn) * p
+                local v = math.floor(rv / inc + 0.5) * inc
+                v = math.clamp(v, mn, mx)
+                Sl.Value = v
+                local pc = (v - mn) / (mx - mn)
+                sf.Size = UDim2.new(pc, 0, 1, 0)
+                sk.Position = UDim2.new(pc, 0, 0.5, 0)
+                vl.Text = tostring(v)
+                if cf.Callback then
+                    cf.Callback(v)
+                end
+            end
+            st2.InputBegan:Connect(function(i)
+                if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+                    sld = true
+                    US(i)
+                end
+            end)
+            sk.InputBegan:Connect(function(i)
+                if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+                    sld = true
+                end
+            end)
+            UIS.InputChanged:Connect(function(i)
+                if not sld then return end
+                if i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch then
+                    US(i)
+                end
+            end)
+            UIS.InputEnded:Connect(function(i)
+                if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+                    sld = false
+                end
+            end)
+            function Sl:Set(v)
+                v = math.clamp(v, mn, mx)
+                Sl.Value = v
+                local pc = (v - mn) / (mx - mn)
+                Tw(sf, 0.2, {Size = UDim2.new(pc, 0, 1, 0)})
+                Tw(sk, 0.2, {Position = UDim2.new(pc, 0, 0.5, 0)})
+                vl.Text = tostring(v)
+                if cf.Callback then
+                    cf.Callback(v)
+                end
+            end
+            return Sl
+        end
+
+        function Tab:CreateDropdown(cf)
+            cf = cf or {}
+            local DD = {}
+            DD.Options = cf.Options or {}
+            if cf.Default then
+                DD.Value = cf.Default
+            elseif #DD.Options > 0 then
+                DD.Value = DD.Options[1]
+            else
+                DD.Value = ""
+            end
+            DD.Open = false
+            local ch3 = Mb and 46 or 38
+            local oh = Mb and 34 or 26
+            local co = CE(ch3)
+            co.ClipsDescendants = true
+
+            local hd = C("TextButton", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 0, ch3),
+                Text = "",
+                Parent = co
+            })
+
+            C("TextLabel", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(0.4, -12, 1, 0),
+                Position = UDim2.new(0, 12, 0, 0),
+                Font = Enum.Font.GothamMedium,
+                Text = cf.Name or "Dropdown",
+                TextColor3 = T.Tx,
+                TextSize = Mb and 13 or 11,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Parent = hd
+            })
+
+            local sf2 = C("Frame", {
+                BackgroundColor3 = T.IBg,
+                Size = UDim2.new(0.55, -12, 0, Mb and 30 or 24),
+                Position = UDim2.new(0.45, 0, 0.5, 0),
+                AnchorPoint = Vector2.new(0, 0.5),
+                Parent = hd
+            })
+            Cr(sf2, 6)
+            St(sf2, T.Dv, 1, 0.6)
+
+            local sl2 = C("TextLabel", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, -26, 1, 0),
+                Position = UDim2.new(0, 8, 0, 0),
+                Font = Enum.Font.Gotham,
+                Text = tostring(DD.Value),
+                TextColor3 = T.Tx,
+                TextSize = Mb and 12 or 10,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                Parent = sf2
+            })
+
+            local ar = C("TextLabel", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(0, 16, 1, 0),
+                Position = UDim2.new(1, -18, 0, 0),
+                Font = Enum.Font.GothamBold,
+                Text = "v",
+                TextColor3 = T.STx,
+                TextSize = Mb and 10 or 8,
+                Parent = sf2
+            })
+
+            local of = C("Frame", {
+                BackgroundColor3 = T.IBg,
+                Size = UDim2.new(1, -24, 0, 0),
+                Position = UDim2.new(0, 12, 0, ch3 + 3),
+                ClipsDescendants = true,
+                Parent = co
+            })
+            Cr(of, 6)
+            C("UIListLayout", {
+                SortOrder = Enum.SortOrder.LayoutOrder,
+                Padding = UDim.new(0, 2),
+                Parent = of
+            })
+            Pd(of, 3, 3, 3, 3)
+
+            local function CO(ot)
+                local ob = C("TextButton", {
+                    BackgroundColor3 = T.Bg3,
+                    BackgroundTransparency = 0.5,
+                    Size = UDim2.new(1, 0, 0, oh),
+                    Text = "",
+                    AutoButtonColor = false,
+                    Parent = of
+                })
+                Cr(ob, 5)
+
+                C("TextLabel", {
+                    Name = "OT",
+                    BackgroundTransparency = 1,
+                    Size = UDim2.new(1, -22, 1, 0),
+                    Position = UDim2.new(0, 8, 0, 0),
+                    Font = Enum.Font.Gotham,
+                    Text = ot,
+                    TextColor3 = T.Tx,
+                    TextSize = Mb and 12 or 10,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Parent = ob
+                })
+
+                local ckv = ""
+                if DD.Value == ot then
+                    ckv = ">"
+                end
+                local ck = C("TextLabel", {
+                    Name = "Ck",
+                    BackgroundTransparency = 1,
+                    Size = UDim2.new(0, 14, 1, 0),
+                    Position = UDim2.new(1, -18, 0, 0),
+                    Font = Enum.Font.GothamBold,
+                    Text = ckv,
+                    TextColor3 = T.Ac,
+                    TextSize = Mb and 12 or 10,
+                    Parent = ob
+                })
+
+                ob.MouseEnter:Connect(function()
+                    Tw(ob, 0.15, {BackgroundTransparency = 0})
+                end)
+                ob.MouseLeave:Connect(function()
+                    Tw(ob, 0.15, {BackgroundTransparency = 0.5})
+                end)
+
+                ob.MouseButton1Click:Connect(function()
+                    DD.Value = ot
+                    sl2.Text = ot
+                    for _, ch4 in ipairs(of:GetChildren()) do
+                        if ch4:IsA("TextButton") then
+                            local c2 = ch4:FindFirstChild("Ck")
+                            if c2 then
+                                c2.Text = ""
+                            end
+                        end
+                    end
+                    ck.Text = ">"
+                    DD.Open = false
+                    Tw(co, 0.3, {Size = UDim2.new(1, 0, 0, ch3)})
+                    Tw(of, 0.3, {Size = UDim2.new(1, -24, 0, 0)})
+                    Tw(ar, 0.3, {Rotation = 0})
+                    if cf.Callback then
+                        cf.Callback(ot)
+                    end
+                end)
+            end
+
+            for _, o in ipairs(DD.Options) do
+                CO(o)
+            end
+
+            hd.MouseButton1Click:Connect(function()
+                DD.Open = not DD.Open
+                if DD.Open then
+                    local cnt = #DD.Options
+                    local th4 = (cnt * (oh + 2)) + 10
+                    Tw(co, 0.3, {Size = UDim2.new(1, 0, 0, ch3 + th4 + 6)}, Enum.EasingStyle.Back)
+                    Tw(of, 0.3, {Size = UDim2.new(1, -24, 0, th4)})
+                    Tw(ar, 0.3, {Rotation = 180})
+                else
+                    Tw(co, 0.3, {Size = UDim2.new(1, 0, 0, ch3)})
+                    Tw(of, 0.3, {Size = UDim2.new(1, -24, 0, 0)})
+                    Tw(ar, 0.3, {Rotation = 0})
+                end
+            end)
+
+            function DD:Set(v)
+                DD.Value = v
+                sl2.Text = v
+                if cf.Callback then
+                    cf.Callback(v)
+                end
+            end
+
+            function DD:Refresh(no)
+                DD.Options = no
+                for _, ch4 in ipairs(of:GetChildren()) do
+                    if ch4:IsA("TextButton") then
+                        ch4:Destroy()
+                    end
+                end
+                for _, o in ipairs(no) do
+                    CO(o)
+                end
+                DD.Open = false
+                co.Size = UDim2.new(1, 0, 0, ch3)
+                of.Size = UDim2.new(1, -24, 0, 0)
+            end
+            return DD
+        end
+
+        function Tab:CreateInput(cf)
+            cf = cf or {}
+            local Inp = {}
+            local co = CE()
+
+            C("TextLabel", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(0.38, -12, 1, 0),
+                Position = UDim2.new(0, 12, 0, 0),
+                Font = Enum.Font.GothamMedium,
+                Text = cf.Name or "Input",
+                TextColor3 = T.Tx,
+                TextSize = Mb and 13 or 11,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Parent = co
+            })
+
+            local ifr = C("Frame", {
+                BackgroundColor3 = T.IBg,
+                Size = UDim2.new(0.58, -12, 0, Mb and 30 or 24),
+                Position = UDim2.new(0.42, 0, 0.5, 0),
+                AnchorPoint = Vector2.new(0, 0.5),
+                Parent = co
+            })
+            Cr(ifr, 6)
+            St(ifr, T.Dv, 1, 0.6)
+
+            local tb4 = C("TextBox", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, -14, 1, 0),
+                Position = UDim2.new(0, 7, 0, 0),
+                Font = Enum.Font.Gotham,
+                Text = cf.Default or "",
+                PlaceholderText = cf.Placeholder or "Type...",
+                PlaceholderColor3 = T.DTx,
+                TextColor3 = T.Tx,
+                TextSize = Mb and 12 or 10,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                ClearTextOnFocus = false,
+                Parent = ifr
+            })
+
+            tb4.Focused:Connect(function()
+                local s2 = ifr:FindFirstChildOfClass("UIStroke")
+                if s2 then
+                    Tw(s2, 0.2, {Color = T.Ac, Transparency = 0})
+                end
+            end)
+
+            tb4.FocusLost:Connect(function()
+                local s2 = ifr:FindFirstChildOfClass("UIStroke")
+                if s2 then
+                    Tw(s2, 0.2, {Color = T.Dv, Transparency = 0.6})
+                end
+                if cf.Callback then
+                    cf.Callback(tb4.Text)
+                end
+            end)
+
+            function Inp:Set(t)
+                tb4.Text = t
+            end
+            return Inp
+        end
+
+        function Tab:CreateKeybind(cf)
+            cf = cf or {}
+            local KB = {}
+            KB.Value = cf.Default or Enum.KeyCode.Unknown
+            local listen = false
+            local co = CE()
+
+            C("TextLabel", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(0.5, -12, 1, 0),
+                Position = UDim2.new(0, 12, 0, 0),
+                Font = Enum.Font.GothamMedium,
+                Text = cf.Name or "Keybind",
+                TextColor3 = T.Tx,
+                TextSize = Mb and 13 or 11,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Parent = co
+            })
+
+            local kw = Mb and 80 or 65
+            local kh = Mb and 28 or 22
+            local ktx
+            if KB.Value ~= Enum.KeyCode.Unknown then
+                ktx = KB.Value.Name
+            else
+                ktx = "None"
+            end
+
+            local kb = C("TextButton", {
+                BackgroundColor3 = T.IBg,
+                Size = UDim2.new(0, kw, 0, kh),
+                Position = UDim2.new(1, -(kw + 10), 0.5, 0),
+                AnchorPoint = Vector2.new(0, 0.5),
+                Font = Enum.Font.GothamMedium,
+                Text = ktx,
+                TextColor3 = T.Ac,
+                TextSize = Mb and 11 or 9,
+                AutoButtonColor = false,
+                Parent = co
+            })
+            Cr(kb, 6)
+            St(kb, T.Dv, 1, 0.6)
+
+            kb.MouseButton1Click:Connect(function()
+                listen = true
+                kb.Text = "..."
+                local s2 = kb:FindFirstChildOfClass("UIStroke")
+                if s2 then
+                    Tw(s2, 0.2, {Color = T.Ac})
+                end
+            end)
+
+            UIS.InputBegan:Connect(function(i, p)
+                if p then return end
+                if listen then
+                    if i.UserInputType == Enum.UserInputType.Keyboard then
+                        listen = false
+                        if i.KeyCode == Enum.KeyCode.Backspace then
+                            KB.Value = Enum.KeyCode.Unknown
+                            kb.Text = "None"
+                        else
+                            KB.Value = i.KeyCode
+                            kb.Text = i.KeyCode.Name
+                        end
+                        local s2 = kb:FindFirstChildOfClass("UIStroke")
+                        if s2 then
+                            Tw(s2, 0.2, {Color = T.Dv})
+                        end
+                    end
+                else
+                    if KB.Value ~= Enum.KeyCode.Unknown then
+                        if i.KeyCode == KB.Value then
+                            if cf.Callback then
+                                cf.Callback(KB.Value)
+                            end
+                        end
+                    end
+                end
+            end)
+
+            function KB:Set(k)
+                KB.Value = k
+                if k ~= Enum.KeyCode.Unknown then
+                    kb.Text = k.Name
+                else
+                    kb.Text = "None"
+                end
+            end
+            return KB
+        end
+
+        function Tab:CreateParagraph(cf)
+            cf = cf or {}
+            local ph = Mb and 65 or 55
+            local co = CE(ph)
+            Pd(co, 8, 8, 12, 12)
+
+            local ttl = C("TextLabel", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 0, Mb and 20 or 16),
+                Font = Enum.Font.GothamBold,
+                Text = cf.Title or "Title",
+                TextColor3 = T.Tx,
+                TextSize = Mb and 14 or 12,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Parent = co
+            })
+
+            local cnt = C("TextLabel", {
+                BackgroundTransparency = 1,
+                Position = UDim2.new(0, 0, 0, Mb and 22 or 18),
+                Size = UDim2.new(1, 0, 1, Mb and -22 or -18),
+                Font = Enum.Font.Gotham,
+                Text = cf.Content or "Content",
+                TextColor3 = T.STx,
+                TextSize = Mb and 12 or 10,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextYAlignment = Enum.TextYAlignment.Top,
+                TextWrapped = true,
+                Parent = co
+            })
+
+            local Pg = {}
+            function Pg:Set(nc)
+                if nc.Title then
+                    ttl.Text = nc.Title
+                end
+                if nc.Content then
+                    cnt.Text = nc.Content
+                end
+            end
+            return Pg
+        end
+
+        return Tab
+    end
+
+    function W:Notify(cf)
+        cf = cf or {}
+        local tc4 = {
+            Info = T.Ac,
+            Success = T.Suc,
+            Warning = T.Wrn,
+            Error = T.Err
+        }
+        local tp = cf.Type or "Info"
+        local cl = tc4[tp] or T.Ac
+        local nw = Mb and 230 or 260
+        local nh = Mb and 62 or 55
+
+        local nf = C("Frame", {
+            BackgroundColor3 = T.Nt,
+            Size = UDim2.new(0, nw, 0, nh),
+            ClipsDescendants = true,
+            Parent = NH
+        })
+        Cr(nf, 10)
+        St(nf, cl, 1, 0.7)
+
+        C("Frame", {
+            BackgroundColor3 = cl,
+            Size = UDim2.new(0, 3, 1, -8),
+            Position = UDim2.new(0, 5, 0, 4),
+            Parent = nf
+        })
+
+        C("TextLabel", {
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0, 14, 0, Mb and 7 or 5),
+            Size = UDim2.new(1, -20, 0, Mb and 18 or 14),
+            Font = Enum.Font.GothamBold,
+            Text = cf.Title or "Notice",
+            TextColor3 = T.Tx,
+            TextSize = Mb and 13 or 11,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = nf
+        })
+
+        C("TextLabel", {
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0, 14, 0, Mb and 26 or 21),
+            Size = UDim2.new(1, -20, 0, Mb and 30 or 26),
+            Font = Enum.Font.Gotham,
+            Text = cf.Content or "",
+            TextColor3 = T.STx,
+            TextSize = Mb and 11 or 9,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextWrapped = true,
+            Parent = nf
+        })
+
+        local pb = C("Frame", {
+            BackgroundColor3 = cl,
+            Size = UDim2.new(1, 0, 0, 2),
+            Position = UDim2.new(0, 0, 1, -2),
+            Parent = nf
+        })
+
+        local dur = cf.Duration or 4
+        nf.Position = UDim2.new(1, 20, 0, 0)
+        Tw(nf, 0.4, {Position = UDim2.new(0, 0, 0, 0)}, Enum.EasingStyle.Back)
+        Tw(pb, dur, {Size = UDim2.new(0, 0, 0, 2)})
+
+        task.delay(dur, function()
+            Tw(nf, 0.3, {
+                Position = UDim2.new(1, 20, 0, 0),
+                BackgroundTransparency = 1
+            })
+            task.delay(0.35, function()
+                nf:Destroy()
+            end)
+        end)
+    end
+
+    function W:Destroy()
+        Tw(MF, 0.4, {
+            Size = UDim2.new(0, 0, 0, 0),
+            BackgroundTransparency = 1
+        })
+        task.delay(0.45, function()
+            SG:Destroy()
+        end)
+    end
+
+    return W
+end
+
+return Nova
